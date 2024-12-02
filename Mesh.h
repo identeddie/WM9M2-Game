@@ -3,6 +3,7 @@
 #include "DXCore.h"
 #include "ShaderManager.h"
 #include "GEMLoader.h"
+#include "Animation.h"
 
 class Vertex {
 public:
@@ -16,6 +17,16 @@ struct STATIC_VERTEX {
 	Vec3 tangent;
 	float tu;
 	float tv;
+};
+
+struct ANIMATED_VERTEX {
+	Vec3 pos;
+	Vec3 normal;
+	Vec3 tangent;
+	float tu;
+	float tv;
+	unsigned int bonesIDs[4];
+	float boneWeights[4];
 };
 
 class Triangle {
@@ -87,6 +98,10 @@ public:
 		init(core, &vertices[0], sizeof(STATIC_VERTEX), vertices.size(), &indices[0], indices.size());
 	}
 
+	void init(DXCore& core, std::vector<ANIMATED_VERTEX> vertices, std::vector<unsigned int> indices) {
+		init(core, &vertices[0], sizeof(ANIMATED_VERTEX), vertices.size(), &indices[0], indices.size());
+	}
+
 	void draw(DXCore& core) {
 		UINT offsets = 0;
 		core.devicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -115,10 +130,10 @@ public:
 
 	void init(DXCore& core, ShaderManager& shaders) {
 		std::vector<STATIC_VERTEX> vertices;
-		vertices.push_back(addVertex(Vec3(-15, 0, -15), Vec3(0, 1, 0), 0, 0));
-		vertices.push_back(addVertex(Vec3(15, 0, -15), Vec3(0, 1, 0), 1, 0));
-		vertices.push_back(addVertex(Vec3(-15, 0, 15), Vec3(0, 1, 0), 0, 1));
-		vertices.push_back(addVertex(Vec3(15, 0, 15), Vec3(0, 1, 0), 1, 1));
+		vertices.push_back(addVertex(Vec3(-150, 0, -150), Vec3(0, 1, 0), 0, 0));
+		vertices.push_back(addVertex(Vec3(150, 0, -150), Vec3(0, 1, 0), 1, 0));
+		vertices.push_back(addVertex(Vec3(-150, 0, 150), Vec3(0, 1, 0), 0, 1));
+		vertices.push_back(addVertex(Vec3(150, 0, 150), Vec3(0, 1, 0), 1, 1));
 		std::vector<unsigned int> indices;
 		indices.push_back(2); indices.push_back(1); indices.push_back(0);
 		indices.push_back(1); indices.push_back(2); indices.push_back(3);
@@ -126,7 +141,7 @@ public:
 
 		Shader shader;
 		shaders.addShader("static", shader);
-		shaders.shaders["static"].init(core, "vertexShader1.txt", "pixelShader1.txt");
+		shaders.shaders["static"].init(core, "Shaders/vs_static.txt", "Shaders/ps_static.txt", false);
 	}
 
 	void draw(DXCore& core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
@@ -200,7 +215,7 @@ public:
 
 		Shader shader;
 		shaders.addShader("static", shader);
-		shaders.shaders["static"].init(core, "vertexShader1.txt", "pixelShader1.txt");
+		shaders.shaders["static"].init(core, "Shaders/vs_static.txt", "Shaders/ps_static.txt", false);
 	}
 
 	void draw(DXCore& core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
@@ -254,12 +269,13 @@ public:
 
 		Shader shader;
 		shaders.addShader("static", shader);
-		shaders.shaders["static"].init(core, "vertexShader1.txt", "pixelShader1.txt");
+		shaders.shaders["static"].init(core, "Shaders/vs_static.txt", "Shaders/ps_static_pulse.txt", false);
 	}
 
-	void draw(DXCore& core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
+	void draw(DXCore& core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj, float* time) {
 		shaders.updateConstantVS("static", "staticMeshBuffer", "W", worldMat);
 		shaders.updateConstantVS("static", "staticMeshBuffer", "VP", viewProj);
+		shaders.updateConstantPS("static", "timeBuff", "time", time);
 		shaders.apply(core, "static");
 		mesh.draw(core);
 	}
@@ -290,7 +306,7 @@ public:
 
 		Shader shader;
 		shaders.addShader("static", shader);
-		shaders.shaders["static"].init(core, "vertexShader1.txt", "pixelShader1.txt");
+		shaders.shaders["static"].init(core, "Shaders/vs_static.txt", "Shaders/ps_static.txt", false);
 	}
 
 	void draw(DXCore& core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
@@ -303,6 +319,99 @@ public:
 		}
 
 	}
+};
 
+class AnimatedModel {
+public:
+	std::vector<Mesh> meshes;
+	Animation animation;
 
+	void init(DXCore& core, ShaderManager& shaders, std::string modelFile) {
+		GEMLoader::GEMModelLoader loader;
+		std::vector<GEMLoader::GEMMesh> gemmeshes;
+		GEMLoader::GEMAnimation gemanimation;
+		loader.load(modelFile, gemmeshes, gemanimation);
+
+		for (int i = 0; i < gemmeshes.size(); i++) {
+			Mesh mesh;
+			std::vector<ANIMATED_VERTEX> vertices;
+
+			for (int j = 0; j < gemmeshes[i].verticesAnimated.size(); j++) {
+				ANIMATED_VERTEX v;
+				memcpy(&v, &gemmeshes[i].verticesAnimated[j], sizeof(ANIMATED_VERTEX));
+				vertices.push_back(v);
+			}
+
+			mesh.init(core, vertices, gemmeshes[i].indices);
+			meshes.push_back(mesh);
+		}
+
+		for (int i = 0; i < gemanimation.bones.size(); i++) {
+			Bone bone;
+			bone.name = gemanimation.bones[i].name;
+			memcpy(&bone.offset, &gemanimation.bones[i].offset, 16 * sizeof(float));
+			bone.parentIndex = gemanimation.bones[i].parentIndex;
+			animation.skeleton.bones.push_back(bone);
+		}
+
+		for (int i = 0; i < gemanimation.animations.size(); i++) {
+			std::string name = gemanimation.animations[i].name;
+			AnimationSequence aseq;
+			aseq.ticksPerSecond = gemanimation.animations[i].ticksPerSecond;
+
+			for (int n = 0; n < gemanimation.animations[i].frames.size(); n++) {
+				AnimationFrame frame;
+
+				for (int index = 0; index < gemanimation.animations[i].frames[n].positions.size(); index++) {
+					Vec3 p;
+					Quaternion q;
+					Vec3 s;
+
+					memcpy(&p, &gemanimation.animations[i].frames[n].positions[index], sizeof(Vec3));
+					frame.positions.push_back(p);
+					memcpy(&q, &gemanimation.animations[i].frames[n].rotations[index], sizeof(Quaternion));
+					frame.rotations.push_back(q);
+					memcpy(&s, &gemanimation.animations[i].frames[n].scales[index], sizeof(Vec3));
+					frame.scales.push_back(s);
+				}
+
+				aseq.frames.push_back(frame);
+			}
+
+			animation.animations.insert({ name, aseq });
+		}
+
+		Shader shader;
+		shaders.addShader("animated", shader);
+		shaders.shaders["animated"].init(core, "Shaders/vs_animated.txt", "Shaders/ps_static.txt", true);
+	}
+
+};
+
+class AnimatedModelInstance {
+public:
+	AnimatedModel* model;
+	AnimationInstance instance;
+
+	void init(AnimatedModel* _model) {
+		model = _model;
+		instance.init(&model->animation);
+	}
+
+	void changeAnimation(std::string animation) {
+ 		instance.update(animation, 0);
+	}
+
+	void draw(DXCore& core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj, float dt) {
+		instance.update(instance.currentAnimation, dt);
+
+		shaders.updateConstantVS("animated", "animatedMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("animated", "animatedMeshBuffer", "VP", viewProj);
+		shaders.updateConstantVS("animated", "animatedMeshBuffer", "bones", instance.matrices);
+		shaders.apply(core, "animated");
+
+		for (int i = 0; i < model->meshes.size(); i++) {
+			model->meshes[i].draw(core);
+		}
+	}
 };

@@ -19,7 +19,10 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 	Shader shader;
 	ShaderManager shaders;
 	shaders.addShader("pulse", shader);
-	shaders.shaders["pulse"].init(dxcore, "vertexShader.txt", "pixelShader.txt");
+	shaders.shaders["pulse"].init(dxcore, "Shaders/vs_basic.txt", "Shaders/ps_basic.txt", false);
+
+	Plane plane;
+	plane.init(dxcore, shaders);
 
 	Cube cube;
 	cube.init(dxcore, shaders);
@@ -32,6 +35,14 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 
 	StaticModel pump;
 	pump.init(dxcore, shaders, "Resources/Models/cactus_009.gem");
+
+	AnimatedModel trex;
+	trex.init(dxcore, shaders, "Resources/Models/TRex.gem");
+
+	AnimatedModelInstance dino;
+	dino.init(&trex);
+	dino.instance.update("Run", 0);
+	//dino.changeAnimation("Run");
 
 	Vec3 pos(10, 5, 10);
 	Persective cam(pos);
@@ -50,8 +61,6 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 
 	GamesEngineeringBase::Timer timer;
 	timer.reset();
-
-	//Vec3 to(0.f, 1.f, 0.f);
 
 	float aspect = (float)win.width / (float)win.height;
 	Matrix proj = Matrix::perspectiveProj(aspect, M_PI / 2.f, 0.05f, 100.f);
@@ -79,19 +88,25 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 
 
 		//Draw Things
-		sphere.draw(dxcore, shaders, &worldMat, &view);
+		plane.draw(dxcore, shaders, &worldMat, &view);
 
-		worldMat = Matrix::translation(Vec3(0, 5, 0));
-		sphere.draw(dxcore, shaders, &worldMat, &view);
+		worldMat = Matrix::translation(Vec3(-5, 0, 0));
+		sphere.draw(dxcore, shaders, &worldMat, &view, &time);
+
+		worldMat = Matrix::translation(Vec3(0, 0, 5));
+		sphere.draw(dxcore, shaders, &worldMat, &view, &time);
 
 		worldMat = Matrix::translation(Vec3(5, 0, 0));
-		sphere.draw(dxcore, shaders, &worldMat, &view);
+		sphere.draw(dxcore, shaders, &worldMat, &view, &time);
 
-		worldMat = Matrix::scaling(Vec3(0.01f, 0.01f, 0.01f));
+		worldMat = Matrix::scaling(Vec3(0.1f, 0.1f, 0.1f)) * Matrix::rotateY(sinf(time));
 		tree.draw(dxcore, shaders, &worldMat, &view);
 
-		worldMat = Matrix::scaling(Vec3(0.01f, 0.01f, 0.01f)) * Matrix::rotateY(-cam.dir.phi) * Matrix::translation(cam.pos + (cam.fwd * 5));
-		pump.draw(dxcore, shaders, &worldMat, &view);
+		worldMat = Matrix::translation(Vec3(20, 0, 0));
+		dino.draw(dxcore, shaders, &worldMat, &view, dt);
+
+		/*worldMat = Matrix::scaling(Vec3(0.01f, 0.01f, 0.01f)) * Matrix::rotateY(-cam.dir.phi) * Matrix::translation(cam.pos + (cam.fwd * 5));
+		pump.draw(dxcore, shaders, &worldMat, &view);*/
 
 		dxcore.present();
 

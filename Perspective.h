@@ -79,19 +79,23 @@ public:
 		Vec3 posChange;
 
 		if (win.keyPressed('W')) {
-			posChange += fwd;
+			posChange.x += fwd.x;
+			posChange.z += fwd.z;
 		}
 
 		if (win.keyPressed('S')) {
-			posChange -= fwd;
+			posChange.x -= fwd.x;
+			posChange.z -= fwd.z;
 		}
 
 		if (win.keyPressed('A')) {
-			posChange += right;
+			posChange.x += right.x;
+			posChange.z += right.z;
 		}
 
 		if (win.keyPressed('D')) {
-			posChange -= right;
+			posChange.x -= right.x;
+			posChange.z -= right.z;
 		}
 
 		float mag = posChange.mag();

@@ -717,11 +717,23 @@ public:
 		d = v.z * sn;
 	}
 
+	Quaternion operator*(const float k) {
+		return Quaternion(a * k, b * k, c * k, d * k);
+	}
+
+	Quaternion operator+(const Quaternion& quat) {
+		return Quaternion(a + quat.a, b + quat.b, c + quat.c, d + quat.d);
+	}
+
 	Quaternion operator*(const Quaternion& quat) {
 		return Quaternion(a * quat.a - b * quat.b - c * quat.c - d * quat.d,
 			a * quat.b + b * quat.a + c * quat.d - d * quat.c,
 			a * quat.c - b * quat.d + c * quat.a + d * quat.b,
 			a * quat.d + b * quat.c - c * quat.b + d * quat.a);
+	}
+
+	Quaternion operator-() const {
+		return Quaternion(-a, -b, -c, -d);
 	}
 
 	float mag() {
@@ -759,8 +771,22 @@ public:
 		return *this;
 	}
 
+	float dot(Quaternion& q2) {
+		return (a * q2.a) + (b * q2.b) + (c * q2.c) + (d * q2.d);
+	}
+
+	Quaternion slerp(Quaternion& q2, float t) {
+		float theta = acosf(this->dot(q2));
+
+		float oneOverSinTheta = 1 / sinf(theta);
+
+		Quaternion ret = (*this * (sinf(theta * (1 - t)) * oneOverSinTheta)) + (q2 * (sinf(theta * t) * oneOverSinTheta));
+
+		return ret;
+	}
+
 	Matrix toMatrix() {
-		float twob2 = 2 * sq(2);
+		float twob2 = 2 * sq(b);
 		float twoc2 = 2 * sq(c);
 		float twod2 = 2 * sq(d);
 
@@ -779,13 +805,35 @@ public:
 		ret[5] = 1 - twob2 - twod2;
 		ret[6] = twocd - twoab;
 		ret[8] = twobd - twoac;
-		ret[9] = twocd - twoab;
+		ret[9] = twocd + twoab;
 		ret[10] = 1 - twob2 - twoc2;
 
 		return ret;
+	}	
+};
+
+float dot(Quaternion& q1, Quaternion& q2) {
+	return (q1.a * q2.a) + (q1.b * q2.b) + (q1.c * q2.c) + (q1.d * q2.d);
+}
+
+Quaternion slerp(Quaternion& q1, Quaternion& q2, float t) {
+	float dotProd = q1.dot(q2);
+
+	if (dotProd < 0.f) {
+		dotProd = -q1.dot(q2);
 	}
 
-};
+ 	float theta = acosf(dotProd);
+
+	if (theta < 0.0001f) {
+		return q1 * (1 - t) + q2 * t;
+	}
+
+	float oneOverSinTheta = 1.f / sinf(theta);
+
+	Quaternion ret = (q1 * (sinf(theta * (1.f - t)) * oneOverSinTheta)) + (q2 * (sinf(theta * t) * oneOverSinTheta));
+	return ret;
+}
 
 class Color {
 public:
