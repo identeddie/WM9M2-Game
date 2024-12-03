@@ -284,8 +284,9 @@ public:
 class StaticModel {
 public:
 	std::vector<Mesh> meshes;
+	std::vector<std::string> textureFilenames;
 
-	void init(DXCore& core, ShaderManager& shaders, std::string modelFile) {
+	void init(DXCore& core, ShaderManager& shaders, TextureManager& textures, std::string modelFile) {
 		GEMLoader::GEMModelLoader loader;
 		std::vector<GEMLoader::GEMMesh> gemmeshes;
 		loader.load(modelFile, gemmeshes);
@@ -300,24 +301,31 @@ public:
 				vertices.push_back(v);
 			}
 
+			textureFilenames.push_back(gemmeshes[i].material.find("diffuse").getValue());
 			mesh.init(core, vertices, gemmeshes[i].indices);
 			meshes.push_back(mesh);
 		}
 
 		Shader shader;
-		shaders.addShader("static", shader);
-		shaders.shaders["static"].init(core, "Shaders/vs_static.txt", "Shaders/ps_static.txt", false);
+		shaders.addShader("static_tex", shader);
+		shaders.shaders["static_tex"].init(core, "Shaders/vs_static.txt", "Shaders/ps_textured.txt", false);
+
+		for (int i = 0; i < textureFilenames.size(); i++) {
+			Texture texture;
+			textures.addTexture(textureFilenames[i], texture);
+			textures.textures[textureFilenames[i]].load(core, textureFilenames[i]);
+		}
 	}
 
-	void draw(DXCore& core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
-		shaders.updateConstantVS("static", "staticMeshBuffer", "W", worldMat);
-		shaders.updateConstantVS("static", "staticMeshBuffer", "VP", viewProj);
-		shaders.apply(core, "static");
+	void draw(DXCore& core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {
+		shaders.updateConstantVS("static_tex", "staticMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static_tex", "staticMeshBuffer", "VP", viewProj);
+		shaders.apply(core, "static_tex");
 
 		for (int i = 0; i < meshes.size(); i++) {
+			shaders.shaders["static_tex"].bindTexturePS(core, textures.find(textureFilenames[i]));
 			meshes[i].draw(core);
 		}
-
 	}
 };
 
@@ -325,8 +333,9 @@ class AnimatedModel {
 public:
 	std::vector<Mesh> meshes;
 	Animation animation;
+	std::vector<std::string> textureFilenames;
 
-	void init(DXCore& core, ShaderManager& shaders, std::string modelFile) {
+	void init(DXCore& core, ShaderManager& shaders, TextureManager& textures, std::string modelFile) {
 		GEMLoader::GEMModelLoader loader;
 		std::vector<GEMLoader::GEMMesh> gemmeshes;
 		GEMLoader::GEMAnimation gemanimation;
@@ -342,6 +351,7 @@ public:
 				vertices.push_back(v);
 			}
 
+			textureFilenames.push_back(gemmeshes[i].material.find("diffuse").getValue());
 			mesh.init(core, vertices, gemmeshes[i].indices);
 			meshes.push_back(mesh);
 		}
@@ -381,9 +391,15 @@ public:
 			animation.animations.insert({ name, aseq });
 		}
 
+		for (int i = 0; i < textureFilenames.size(); i++) {
+			Texture texture;
+			textures.addTexture(textureFilenames[i], texture);
+			textures.textures[textureFilenames[i]].load(core, textureFilenames[i]);
+		}
+
 		Shader shader;
 		shaders.addShader("animated", shader);
-		shaders.shaders["animated"].init(core, "Shaders/vs_animated.txt", "Shaders/ps_static.txt", true);
+		shaders.shaders["animated"].init(core, "Shaders/vs_animated.txt", "Shaders/ps_textured.txt", true);
 	}
 
 };
@@ -402,7 +418,11 @@ public:
  		instance.update(animation, 0);
 	}
 
-	void draw(DXCore& core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj, float dt) {
+	void update(std::string animation, float dt) {
+		instance.update(animation, dt);
+	}
+
+	void draw(DXCore& core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj, float dt) {
 		instance.update(instance.currentAnimation, dt);
 
 		shaders.updateConstantVS("animated", "animatedMeshBuffer", "W", worldMat);
@@ -411,6 +431,7 @@ public:
 		shaders.apply(core, "animated");
 
 		for (int i = 0; i < model->meshes.size(); i++) {
+			shaders.shaders["animated"].bindTexturePS(core, textures.find(model->textureFilenames[i]));
 			model->meshes[i].draw(core);
 		}
 	}

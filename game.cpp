@@ -18,30 +18,42 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 	Triangle tri(dxcore);
 	Shader shader;
 	ShaderManager shaders;
+	TextureManager textures;
+
+	Sampler sampler;
+	sampler.init(dxcore);
+
 	shaders.addShader("pulse", shader);
 	shaders.shaders["pulse"].init(dxcore, "Shaders/vs_basic.txt", "Shaders/ps_basic.txt", false);
 
 	Plane plane;
 	plane.init(dxcore, shaders);
 
-	Cube cube;
+	/*Cube cube;
 	cube.init(dxcore, shaders);
 
 	Sphere sphere;
-	sphere.init(dxcore, shaders, 10, 10, 5);
+	sphere.init(dxcore, shaders, 10, 10, 5);*/
 
-	StaticModel tree;
-	tree.init(dxcore, shaders, "Resources/Models/acacia_003.gem");
+	/*StaticModel tree;
+	tree.init(dxcore, shaders, textures, "Resources/Models/acacia_003.gem");*/
 
-	StaticModel pump;
-	pump.init(dxcore, shaders, "Resources/Models/cactus_009.gem");
+	AnimatedModel pump;
+	pump.init(dxcore, shaders, textures, "Resources/Models/Pump_Action_Shotgun.gem");
+
+	AnimatedModelInstance shot;
+	shot.init(&pump);
+	shot.update("Reload", 0);
 
 	AnimatedModel trex;
-	trex.init(dxcore, shaders, "Resources/Models/TRex.gem");
+	trex.init(dxcore, shaders, textures, "Resources/Models/TRex.gem");
+
+	StaticModel pine;
+	pine.init(dxcore, shaders, textures, "Resources/Models/pine.gem");
 
 	AnimatedModelInstance dino;
 	dino.init(&trex);
-	dino.instance.update("Run", 0);
+	dino.update("Run", 0);
 	//dino.changeAnimation("Run");
 
 	Vec3 pos(10, 5, 10);
@@ -75,12 +87,13 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 		float dt = timer.dt();
 		time += dt;
 
-		//Vec3 camPos = Vec3(10 * cosf(time), 5, 10 * sinf(time));
-
 		Matrix worldMat;
 
 		cam.gander(prevMouseX - win.mousex, win.mousey - prevMouseY);
 		cam.meander(win, dt);
+		prevMouseX = win.mousex;
+		prevMouseY = win.mousey;
+		//win.updateMouse(win.width, win.height);
 
 		Vec3 to = cam.pos + cam.fwd;
 		Matrix view = Matrix::lookAt(cam.pos, to);
@@ -90,7 +103,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 		//Draw Things
 		plane.draw(dxcore, shaders, &worldMat, &view);
 
-		worldMat = Matrix::translation(Vec3(-5, 0, 0));
+		/*worldMat = Matrix::translation(Vec3(-5, 0, 0));
 		sphere.draw(dxcore, shaders, &worldMat, &view, &time);
 
 		worldMat = Matrix::translation(Vec3(0, 0, 5));
@@ -100,20 +113,18 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 		sphere.draw(dxcore, shaders, &worldMat, &view, &time);
 
 		worldMat = Matrix::scaling(Vec3(0.1f, 0.1f, 0.1f)) * Matrix::rotateY(sinf(time));
-		tree.draw(dxcore, shaders, &worldMat, &view);
+		tree.draw(dxcore, shaders, &worldMat, &view);*/
 
 		worldMat = Matrix::translation(Vec3(20, 0, 0));
-		dino.draw(dxcore, shaders, &worldMat, &view, dt);
+		dino.draw(dxcore, shaders, textures, &worldMat, &view, dt);
 
-		/*worldMat = Matrix::scaling(Vec3(0.01f, 0.01f, 0.01f)) * Matrix::rotateY(-cam.dir.phi) * Matrix::translation(cam.pos + (cam.fwd * 5));
-		pump.draw(dxcore, shaders, &worldMat, &view);*/
+		worldMat = Matrix::scaling(Vec3(0.1f, 0.1f, 0.1f));
+		pine.draw(dxcore, shaders, textures, &worldMat, &view);
+
+		worldMat = Matrix::scaling(Vec3(0.01f, 0.01f, 0.01f)) * Matrix::rotateY(-cam.dir.phi) * Matrix::translation(cam.pos + (cam.fwd * 5));
+		shot.draw(dxcore, shaders, textures, &worldMat, &view, dt);
 
 		dxcore.present();
-
-		prevMouseX = win.mousex;
-		prevMouseY = win.mousey;
-
-		//win.updateMouse(win.width, win.height);
 	}
 
 	dxcore.close();

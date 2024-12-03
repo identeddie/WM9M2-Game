@@ -21,7 +21,7 @@ public:
 
 		up = Vec3(0.f, 1.f, 0.f);
 
-		if (fwd == up) { //If colinear, change to (0, 1, 0)
+		if (fwd.y == up.y) { //If colinear, change to (0, 1, 0)
 			up.x = 1.f;
 			up.y = 0.f;
 		}
@@ -60,9 +60,9 @@ public:
 			dir.phi += dx;
 
 			if (dir.theta >= M_PI) {
-				dir.theta -= M_PI;
+				dir.theta = M_PI;
 			} else if (dir.theta < 0.f) {
-				dir.theta += M_PI;
+				dir.theta = 0.f;
 			}
 
 			if (dir.phi >= M_PI * 2) {

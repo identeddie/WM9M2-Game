@@ -125,6 +125,14 @@ public:
 		updateConstant(constantBufferName, variableName, data, psConstantBuffers);
 	}
 
+	int getBindPoint(std::string name) {
+		return textureBindPointsPS[name];
+	}
+
+	void bindTexturePS(DXCore& core, ID3D11ShaderResourceView* srv) {
+		core.devicecontext->PSSetShaderResources(textureBindPointsPS["tex"], 1, &srv);
+	}
+
 	void init(DXCore& core, std::string vsFileName, std::string psFileName, bool isAnimated) {
 		std::string vs = readFile(vsFileName);
 		std::string ps = readFile(psFileName);
