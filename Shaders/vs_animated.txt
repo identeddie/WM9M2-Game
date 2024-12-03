@@ -24,9 +24,6 @@ PS_INPUT VS(VS_INPUT input) {
 	PS_INPUT output;
 
 	float4x4 transform = bones[input.BoneIDs[0]] * input.BoneWeights[0];
-	transform += bones[input.BoneIDs[1]] * input.BoneWeights[1];
-	transform += bones[input.BoneIDs[2]] * input.BoneWeights[2];
-	transform += bones[input.BoneIDs[3]] * input.BoneWeights[3];
 	output.Pos = mul(input.Pos, transform);
 	output.Pos = mul(output.Pos, W);
 	output.Pos = mul(output.Pos, VP);
