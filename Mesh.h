@@ -34,7 +34,7 @@ public:
 	Vertex vertices[3];
 	ID3D11Buffer* vertexBuffer;
 
-	Triangle(DXCore& dxcore) {
+	Triangle(DXCore* dxcore) {
 		vertices[0].pos = Vec3(0, 1.f, 0);
 		vertices[0].color = Color(0, 1.0f, 0);
 		vertices[1].pos = Vec3(-1.f, -1.f, 0);
@@ -52,19 +52,18 @@ public:
 		uploadData.pSysMem = vertices;
 		uploadData.SysMemPitch = 0;
 		uploadData.SysMemSlicePitch = 0;
-		dxcore.device->CreateBuffer(&bd, &uploadData, &vertexBuffer);
+		dxcore->device->CreateBuffer(&bd, &uploadData, &vertexBuffer);
 
 	}
 
-	void draw(DXCore& dxcore) {
+	void draw(DXCore* dxcore) {
 		UINT offsets;
 		offsets = 0;
 		UINT strides = sizeof(Vertex);
-		dxcore.devicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		dxcore.devicecontext->IASetVertexBuffers(0, 1, &vertexBuffer, &strides, &offsets);
-		dxcore.devicecontext->Draw(3, 0);
+		dxcore->devicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		dxcore->devicecontext->IASetVertexBuffers(0, 1, &vertexBuffer, &strides, &offsets);
+		dxcore->devicecontext->Draw(3, 0);
 	}
-
 };
 
 class Mesh {
@@ -75,7 +74,7 @@ public:
 	int indicesSize;
 	UINT strides;
 
-	void init(DXCore& core, void* vertices, int vertexSizeInBytes, int numVertices, unsigned int* indices, int numIndices) {
+	void init(DXCore* core, void* vertices, int vertexSizeInBytes, int numVertices, unsigned int* indices, int numIndices) {
 		D3D11_BUFFER_DESC bd;
 		memset(&bd, 0, sizeof(D3D11_BUFFER_DESC));
 		bd.Usage = D3D11_USAGE_DEFAULT;
@@ -85,29 +84,29 @@ public:
 		D3D11_SUBRESOURCE_DATA data;
 		memset(&data, 0, sizeof(D3D11_SUBRESOURCE_DATA));
 		data.pSysMem = indices;
-		core.device->CreateBuffer(&bd, &data, &indexBuffer);
+		core->device->CreateBuffer(&bd, &data, &indexBuffer);
 		bd.ByteWidth = vertexSizeInBytes * numVertices;
 		bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 		data.pSysMem = vertices;
-		core.device->CreateBuffer(&bd, &data, &vertexBuffer);
+		core->device->CreateBuffer(&bd, &data, &vertexBuffer);
 		indicesSize = numIndices;
 		strides = vertexSizeInBytes;
 	}
 
-	void init(DXCore& core, std::vector<STATIC_VERTEX> vertices, std::vector<unsigned int> indices) {
+	void init(DXCore* core, std::vector<STATIC_VERTEX> vertices, std::vector<unsigned int> indices) {
 		init(core, &vertices[0], sizeof(STATIC_VERTEX), vertices.size(), &indices[0], indices.size());
 	}
 
-	void init(DXCore& core, std::vector<ANIMATED_VERTEX> vertices, std::vector<unsigned int> indices) {
+	void init(DXCore* core, std::vector<ANIMATED_VERTEX> vertices, std::vector<unsigned int> indices) {
 		init(core, &vertices[0], sizeof(ANIMATED_VERTEX), vertices.size(), &indices[0], indices.size());
 	}
 
-	void draw(DXCore& core) {
+	void draw(DXCore* core) {
 		UINT offsets = 0;
-		core.devicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		core.devicecontext->IASetVertexBuffers(0, 1, &vertexBuffer, &strides, &offsets);
-		core.devicecontext->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
-		core.devicecontext->DrawIndexed(indicesSize, 0, 0);
+		core->devicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		core->devicecontext->IASetVertexBuffers(0, 1, &vertexBuffer, &strides, &offsets);
+		core->devicecontext->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+		core->devicecontext->DrawIndexed(indicesSize, 0, 0);
 	}
 
 };
@@ -128,7 +127,7 @@ class Plane {
 public:
 	Mesh mesh;
 
-	void init(DXCore& core, ShaderManager& shaders) {
+	void init(DXCore* core, ShaderManager& shaders) {
 		std::vector<STATIC_VERTEX> vertices;
 		vertices.push_back(addVertex(Vec3(-150, 0, -150), Vec3(0, 1, 0), 0, 0));
 		vertices.push_back(addVertex(Vec3(150, 0, -150), Vec3(0, 1, 0), 1, 0));
@@ -139,12 +138,12 @@ public:
 		indices.push_back(1); indices.push_back(2); indices.push_back(3);
 		mesh.init(core, vertices, indices);
 
-		Shader shader;
+		Shader* shader = new Shader;
+		shader->init(core, "Shaders/vs_static.txt", "Shaders/ps_static.txt", false);
 		shaders.addShader("static", shader);
-		shaders.shaders["static"].init(core, "Shaders/vs_static.txt", "Shaders/ps_static.txt", false);
 	}
 
-	void draw(DXCore& core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
+	void draw(DXCore* core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
 		shaders.updateConstantVS("static", "staticMeshBuffer", "W", worldMat);
 		shaders.updateConstantVS("static", "staticMeshBuffer", "VP", viewProj);
 		shaders.apply(core, "static");
@@ -156,7 +155,7 @@ class Cube {
 public:
 	Mesh mesh;
 
-	void init(DXCore& core, ShaderManager& shaders) {
+	void init(DXCore* core, ShaderManager& shaders) {
 		std::vector<STATIC_VERTEX> vertices;
 		Vec3 p0 = Vec3(-1.0f, -1.0f, -1.0f);
 		Vec3 p1 = Vec3(1.0f, -1.0f, -1.0f);
@@ -213,12 +212,12 @@ public:
 
 		mesh.init(core, vertices, indices);
 
-		Shader shader;
+		Shader* shader = new Shader;
+		shader->init(core, "Shaders/vs_static.txt", "Shaders/ps_static.txt", false);
 		shaders.addShader("static", shader);
-		shaders.shaders["static"].init(core, "Shaders/vs_static.txt", "Shaders/ps_static.txt", false);
 	}
 
-	void draw(DXCore& core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
+	void draw(DXCore* core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
 		shaders.updateConstantVS("static", "staticMeshBuffer", "W", worldMat);
 		shaders.updateConstantVS("static", "staticMeshBuffer", "VP", viewProj);
 		shaders.apply(core, "static");
@@ -230,7 +229,7 @@ class Sphere {
 public:
 	Mesh mesh;
 
-	void init(DXCore& core, ShaderManager& shaders, int rings, int segments, int radius) {
+	void init(DXCore* core, ShaderManager& shaders, int rings, int segments, int radius) {
 		std::vector<STATIC_VERTEX> vertices;
 
 		for (int lat = 0; lat <= rings; lat++) {
@@ -267,16 +266,16 @@ public:
 
 		mesh.init(core, vertices, indices);
 
-		Shader shader;
-		shaders.addShader("static", shader);
-		shaders.shaders["static"].init(core, "Shaders/vs_static.txt", "Shaders/ps_static_pulse.txt", false);
+		Shader* shader = new Shader;
+		shader->init(core, "Shaders/vs_static.txt", "Shaders/ps_static_pulse.txt", false);
+		shaders.addShader("static_pulse", shader);
 	}
 
-	void draw(DXCore& core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj, float* time) {
-		shaders.updateConstantVS("static", "staticMeshBuffer", "W", worldMat);
-		shaders.updateConstantVS("static", "staticMeshBuffer", "VP", viewProj);
-		shaders.updateConstantPS("static", "timeBuff", "time", time);
-		shaders.apply(core, "static");
+	void draw(DXCore* core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj, float* time) {
+		shaders.updateConstantVS("static_pulse", "staticMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static_pulse", "staticMeshBuffer", "VP", viewProj);
+		shaders.updateConstantPS("static_pulse", "timeBuff", "time", time);
+		shaders.apply(core, "static_pulse");
 		mesh.draw(core);
 	}
 };
@@ -286,7 +285,7 @@ public:
 	std::vector<Mesh> meshes;
 	std::vector<std::string> textureFilenames;
 
-	void init(DXCore& core, ShaderManager& shaders, TextureManager& textures, std::string modelFile) {
+	void init(DXCore* core, ShaderManager& shaders, TextureManager& textures, std::string modelFile) {
 		GEMLoader::GEMModelLoader loader;
 		std::vector<GEMLoader::GEMMesh> gemmeshes;
 		loader.load(modelFile, gemmeshes);
@@ -306,24 +305,26 @@ public:
 			meshes.push_back(mesh);
 		}
 
-		Shader shader;
+		Shader* shader = new Shader;
+		shader->init(core, "Shaders/vs_static_movement.txt", "Shaders/ps_textured.txt", false);
 		shaders.addShader("static_tex", shader);
-		shaders.shaders["static_tex"].init(core, "Shaders/vs_static.txt", "Shaders/ps_textured.txt", false);
 
 		for (int i = 0; i < textureFilenames.size(); i++) {
-			Texture texture;
+			Texture* texture = new Texture;
+			texture->load(core, textureFilenames[i]);
 			textures.addTexture(textureFilenames[i], texture);
-			textures.textures[textureFilenames[i]].load(core, textureFilenames[i]);
 		}
 	}
 
-	void draw(DXCore& core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {
+	void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj, float* time) {
 		shaders.updateConstantVS("static_tex", "staticMeshBuffer", "W", worldMat);
 		shaders.updateConstantVS("static_tex", "staticMeshBuffer", "VP", viewProj);
+		shaders.updateConstantVS("static_tex", "staticMeshBuffer", "time", time);
 		shaders.apply(core, "static_tex");
 
 		for (int i = 0; i < meshes.size(); i++) {
-			shaders.shaders["static_tex"].bindTexturePS(core, textures.find(textureFilenames[i]));
+			shaders.shaders["static_tex"]->bindTextureVS(core, textures.find(textureFilenames[i]));
+			shaders.shaders["static_tex"]->bindTexturePS(core, textures.find(textureFilenames[i]));
 			meshes[i].draw(core);
 		}
 	}
@@ -335,7 +336,7 @@ public:
 	Animation animation;
 	std::vector<std::string> textureFilenames;
 
-	void init(DXCore& core, ShaderManager& shaders, TextureManager& textures, std::string modelFile) {
+	void init(DXCore* core, ShaderManager& shaders, TextureManager& textures, std::string modelFile) {
 		GEMLoader::GEMModelLoader loader;
 		std::vector<GEMLoader::GEMMesh> gemmeshes;
 		GEMLoader::GEMAnimation gemanimation;
@@ -392,16 +393,15 @@ public:
 		}
 
 		for (int i = 0; i < textureFilenames.size(); i++) {
-			Texture texture;
+			Texture* texture = new Texture;
+			texture->load(core, textureFilenames[i]);
 			textures.addTexture(textureFilenames[i], texture);
-			textures.textures[textureFilenames[i]].load(core, textureFilenames[i]);
 		}
 
-		Shader shader;
+		Shader* shader = new Shader;
+		shader->init(core, "Shaders/vs_animated.txt", "Shaders/ps_textured.txt", true);
 		shaders.addShader("animated", shader);
-		shaders.shaders["animated"].init(core, "Shaders/vs_animated.txt", "Shaders/ps_textured.txt", true);
 	}
-
 };
 
 class AnimatedModelInstance {
@@ -422,7 +422,7 @@ public:
 		instance.update(animation, dt);
 	}
 
-	void draw(DXCore& core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj, float dt) {
+	void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj, float dt) {
 		instance.update(instance.currentAnimation, dt);
 
 		shaders.updateConstantVS("animated", "animatedMeshBuffer", "W", worldMat);
@@ -431,7 +431,7 @@ public:
 		shaders.apply(core, "animated");
 
 		for (int i = 0; i < model->meshes.size(); i++) {
-			shaders.shaders["animated"].bindTexturePS(core, textures.find(model->textureFilenames[i]));
+			shaders.shaders["animated"]->bindTexturePS(core, textures.find(model->textureFilenames[i]));
 			model->meshes[i].draw(core);
 		}
 	}

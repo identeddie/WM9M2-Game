@@ -34,7 +34,7 @@ public:
 	int index;
 	ShaderStage shaderStage;
 
-	void init(DXCore& core, unsigned int sizeInBytes, int constantBufferIndex, ShaderStage _shaderStage) {
+	void init(DXCore* core, unsigned int sizeInBytes, int constantBufferIndex, ShaderStage _shaderStage) {
 		unsigned int sizeInBytes16 = ((sizeInBytes + 15) & -16);
 		D3D11_BUFFER_DESC bd;
 		bd.Usage = D3D11_USAGE_DYNAMIC;
@@ -43,7 +43,7 @@ public:
 		D3D11_SUBRESOURCE_DATA data;
 		bd.ByteWidth = sizeInBytes16;
 		bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-		core.device->CreateBuffer(&bd, NULL, &cb);
+		core->device->CreateBuffer(&bd, NULL, &cb);
 		buffer = new unsigned char[sizeInBytes16];
 		cbSizeInBytes = sizeInBytes;
 		index = constantBufferIndex;
@@ -57,17 +57,17 @@ public:
 		dirty = 1;
 	}
 
-	void upload(DXCore& core) {
+	void upload(DXCore* core) {
 		if (dirty == 1) {
 			D3D11_MAPPED_SUBRESOURCE mapped;
-			core.devicecontext->Map(cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+			core->devicecontext->Map(cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
 			memcpy(mapped.pData, buffer, cbSizeInBytes);
-			core.devicecontext->Unmap(cb, 0);
+			core->devicecontext->Unmap(cb, 0);
 			if (shaderStage == ShaderStage::VertexShader) {
-				core.devicecontext->VSSetConstantBuffers(index, 1, &cb);
+				core->devicecontext->VSSetConstantBuffers(index, 1, &cb);
 			}
 			if (shaderStage == ShaderStage::PixelShader) {
-				core.devicecontext->PSSetConstantBuffers(index, 1, &cb);
+				core->devicecontext->PSSetConstantBuffers(index, 1, &cb);
 			}
 			dirty = 0;
 		}
@@ -81,7 +81,7 @@ public:
 class ConstantBufferReflection {
 public:
 
-	void build(DXCore& core, ID3DBlob* shader, std::vector<ConstantBuffer>& buffers, std::map<std::string, int>& textureBindPoints, ShaderStage _shaderStage) {
+	void build(DXCore* core, ID3DBlob* shader, std::vector<ConstantBuffer>& buffers, std::map<std::string, int>& textureBindPoints, ShaderStage _shaderStage) {
 		ID3D11ShaderReflection* reflection;
 		D3DReflect(shader->GetBufferPointer(), shader->GetBufferSize(), IID_ID3D11ShaderReflection, (void**)&reflection);
 		D3D11_SHADER_DESC desc;

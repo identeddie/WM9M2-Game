@@ -33,7 +33,7 @@ public:
 		return buffer.str();
 	}
 
-	void compileVS(DXCore& core, std::string vsHLSL, bool isAnimated) {
+	void compileVS(DXCore* core, std::string vsHLSL, bool isAnimated) {
 		ID3DBlob* compiledVertexShader;
 		ID3DBlob* status;
 		HRESULT hr = D3DCompile(vsHLSL.c_str(), strlen(vsHLSL.c_str()), NULL, NULL, NULL, "VS", "vs_5_0", 0, 0, &compiledVertexShader, &status);
@@ -44,7 +44,7 @@ public:
 		}
 
 		//D3DWriteBlobToFile(compiledVertexShader, L"shadername.cso", false);
-		core.device->CreateVertexShader(compiledVertexShader->GetBufferPointer(), compiledVertexShader->GetBufferSize(), NULL, &vertexShader);
+		core->device->CreateVertexShader(compiledVertexShader->GetBufferPointer(), compiledVertexShader->GetBufferSize(), NULL, &vertexShader);
 
 		/*D3D11_INPUT_ELEMENT_DESC layoutDesc[] = //Layout Description for basic triangle
 		{
@@ -62,7 +62,7 @@ public:
 				{ "BONEWEIGHTS", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 			};
 
-			core.device->CreateInputLayout(layoutDesc, 6, compiledVertexShader->GetBufferPointer(), compiledVertexShader->GetBufferSize(), &layout);
+			core->device->CreateInputLayout(layoutDesc, 6, compiledVertexShader->GetBufferPointer(), compiledVertexShader->GetBufferSize(), &layout);
 
 		} else { //Shader I/O layout for Static Object
 			D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
@@ -72,14 +72,14 @@ public:
 				{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 			};
 
-			core.device->CreateInputLayout(layoutDesc, 4, compiledVertexShader->GetBufferPointer(), compiledVertexShader->GetBufferSize(), &layout);
+			core->device->CreateInputLayout(layoutDesc, 4, compiledVertexShader->GetBufferPointer(), compiledVertexShader->GetBufferSize(), &layout);
 		}
 
 		ConstantBufferReflection reflection;
 		reflection.build(core, compiledVertexShader, vsConstantBuffers, textureBindPointsVS, ShaderStage::VertexShader);
 	}
 
-	void compilePS(DXCore& core, std::string psHLSL) {
+	void compilePS(DXCore* core, std::string psHLSL) {
 		ID3DBlob* compiledPixelShader;
 		ID3DBlob* status;
 		HRESULT hr = D3DCompile(psHLSL.c_str(), strlen(psHLSL.c_str()), NULL, NULL, NULL, "PS", "ps_5_0", 0, 0, &compiledPixelShader, &status);
@@ -89,15 +89,15 @@ public:
 			exit(0);
 		}
 
-		core.device->CreatePixelShader(compiledPixelShader->GetBufferPointer(), compiledPixelShader->GetBufferSize(), NULL, &pixelShader);
+		core->device->CreatePixelShader(compiledPixelShader->GetBufferPointer(), compiledPixelShader->GetBufferSize(), NULL, &pixelShader);
 		ConstantBufferReflection reflection;
 		reflection.build(core, compiledPixelShader, psConstantBuffers, textureBindPointsPS, ShaderStage::PixelShader);
 	}
 
-	void apply(DXCore& core) {
-		core.devicecontext->IASetInputLayout(layout);
-		core.devicecontext->VSSetShader(vertexShader, NULL, 0);
-		core.devicecontext->PSSetShader(pixelShader, NULL, 0);
+	void apply(DXCore* core) {
+		core->devicecontext->IASetInputLayout(layout);
+		core->devicecontext->VSSetShader(vertexShader, NULL, 0);
+		core->devicecontext->PSSetShader(pixelShader, NULL, 0);
 
 		for (int i = 0; i < vsConstantBuffers.size(); i++) {
 			vsConstantBuffers[i].upload(core);
@@ -129,11 +129,15 @@ public:
 		return textureBindPointsPS[name];
 	}
 
-	void bindTexturePS(DXCore& core, ID3D11ShaderResourceView* srv) {
-		core.devicecontext->PSSetShaderResources(textureBindPointsPS["tex"], 1, &srv);
+	void bindTexturePS(DXCore* core, ID3D11ShaderResourceView* srv) {
+		core->devicecontext->PSSetShaderResources(textureBindPointsPS["tex"], 1, &srv);
 	}
 
-	void init(DXCore& core, std::string vsFileName, std::string psFileName, bool isAnimated) {
+	void bindTextureVS(DXCore* core, ID3D11ShaderResourceView* srv) {
+		core->devicecontext->VSSetShaderResources(textureBindPointsVS["tex"], 1, &srv);
+	}
+
+	void init(DXCore* core, std::string vsFileName, std::string psFileName, bool isAnimated) {
 		std::string vs = readFile(vsFileName);
 		std::string ps = readFile(psFileName);
 

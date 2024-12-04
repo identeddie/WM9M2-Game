@@ -11,7 +11,7 @@ public:
 	ID3D11Texture2D* texture;
 	ID3D11ShaderResourceView* srv;
 
-	void init(DXCore& core, int width, int height, int channels, DXGI_FORMAT format, unsigned char* data) {
+	void init(DXCore* core, int width, int height, int channels, DXGI_FORMAT format, unsigned char* data) {
 		D3D11_TEXTURE2D_DESC texDesc;
 		memset(&texDesc, 0, sizeof(D3D11_TEXTURE2D_DESC));
 		texDesc.Width = width;
@@ -28,17 +28,17 @@ public:
 		memset(&initData, 0, sizeof(D3D11_SUBRESOURCE_DATA));
 		initData.pSysMem = data;
 		initData.SysMemPitch = width * channels;
-		core.device->CreateTexture2D(&texDesc, &initData, &texture);
+		core->device->CreateTexture2D(&texDesc, &initData, &texture);
 
 		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
 		srvDesc.Format = format;
 		srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 		srvDesc.Texture2D.MostDetailedMip = 0;
 		srvDesc.Texture2D.MipLevels = 1;
-		core.device->CreateShaderResourceView(texture, &srvDesc, &srv);
+		core->device->CreateShaderResourceView(texture, &srvDesc, &srv);
 	}
 
-	void load(DXCore& core, std::string textureFile) {
+	void load(DXCore* core, std::string textureFile) {
 		int width = 0;
 		int height = 0;
 		int channels = 0;
@@ -71,7 +71,7 @@ class Sampler {
 public:
 	ID3D11SamplerState* state;
 
-	void init(DXCore& core) {
+	void init(DXCore* core) {
 		D3D11_SAMPLER_DESC samplerDesc;
 		ZeroMemory(&samplerDesc, sizeof(samplerDesc));
 		samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -81,9 +81,9 @@ public:
 		samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
 		samplerDesc.MinLOD = 0;
 		samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
-		core.device->CreateSamplerState(&samplerDesc, &state);
+		core->device->CreateSamplerState(&samplerDesc, &state);
 
 		//Bind (should be made separate when using multiple sampling states)
-		core.devicecontext->PSSetSamplers(0, 1, &state);
+		core->devicecontext->PSSetSamplers(0, 1, &state);
 	}
 };
