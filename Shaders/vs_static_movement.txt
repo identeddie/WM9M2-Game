@@ -1,0 +1,39 @@
+Texture2D tex : register(t0);
+SamplerState samplerLinear : register(s0);
+
+cbuffer staticMeshBuffer {
+	float4x4 W;
+	float4x4 VP;
+	float time;
+}
+
+struct VS_INPUT {
+	float4 Pos : POS;
+	float3 Normal : NORMAL;
+	float3 Tangent : TANGENT;
+	float2 TexCoords : TEXCOORD;
+};
+
+struct PS_INPUT {
+	float4 Pos : SV_POSITION;
+	float3 Normal : NORMAL;
+	float3 Tangent : TANGENT;
+	float2 TexCoords : TEXCOORD;
+};
+
+PS_INPUT VS(VS_INPUT input) {
+	PS_INPUT output;
+
+	float4 color = tex.SampleLevel(samplerLinear, input.TexCoords, 0);
+	float sway = 5 * (1 - color.a) * sin(time * 0.1 + input.Pos.x);
+
+	input.Pos.y += sway;
+	input.Pos.x += 3 * sway;
+
+	output.Pos = mul(input.Pos, W);
+	output.Pos = mul(output.Pos, VP);
+	output.Normal = mul(input.Normal, (float3x3)W);
+	output.Tangent = mul(input.Tangent, (float3x3)W);
+	output.TexCoords = input.TexCoords;
+	return output;
+}
