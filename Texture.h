@@ -10,8 +10,9 @@ class Texture {
 public:
 	ID3D11Texture2D* texture;
 	ID3D11ShaderResourceView* srv;
+	ID3D11RenderTargetView* rtv;
 
-	void init(DXCore* core, int width, int height, int channels, DXGI_FORMAT format, unsigned char* data) {
+	void init(DXCore* core, int width, int height, int channels, DXGI_FORMAT format, unsigned char* data, bool renderTo) {
 		D3D11_TEXTURE2D_DESC texDesc;
 		memset(&texDesc, 0, sizeof(D3D11_TEXTURE2D_DESC));
 		texDesc.Width = width;
@@ -21,14 +22,18 @@ public:
 		texDesc.Format = format;
 		texDesc.SampleDesc.Count = 1;
 		texDesc.Usage = D3D11_USAGE_DEFAULT;
-		texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
 		texDesc.CPUAccessFlags = 0;
 
-		D3D11_SUBRESOURCE_DATA initData;
-		memset(&initData, 0, sizeof(D3D11_SUBRESOURCE_DATA));
-		initData.pSysMem = data;
-		initData.SysMemPitch = width * channels;
-		core->device->CreateTexture2D(&texDesc, &initData, &texture);
+		if (!renderTo) {
+			D3D11_SUBRESOURCE_DATA initData;
+			memset(&initData, 0, sizeof(D3D11_SUBRESOURCE_DATA));
+			initData.pSysMem = data;
+			initData.SysMemPitch = width * channels;
+			core->device->CreateTexture2D(&texDesc, &initData, &texture);
+		} else {
+			core->device->CreateTexture2D(&texDesc, NULL, &texture);
+		}
 
 		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
 		srvDesc.Format = format;
@@ -36,6 +41,14 @@ public:
 		srvDesc.Texture2D.MostDetailedMip = 0;
 		srvDesc.Texture2D.MipLevels = 1;
 		core->device->CreateShaderResourceView(texture, &srvDesc, &srv);
+
+		if (renderTo) {
+			D3D11_RENDER_TARGET_VIEW_DESC rtvDesc;
+			rtvDesc.Format = format;
+			rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+			rtvDesc.Texture2D.MipSlice = 0;
+			core->device->CreateRenderTargetView(texture, &rtvDesc, &rtv);
+		}
 	}
 
 	void load(DXCore* core, std::string textureFile) {
@@ -55,12 +68,12 @@ public:
 				texelsWithAlpha[(i * 4) + 3] = 255;
 			}
 			// Initialize texture using width, height, channels, and texelsWithAlpha
-			init(core, width, height, channels, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, texelsWithAlpha);
+			init(core, width, height, channels, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, texelsWithAlpha, false);
 			delete[] texelsWithAlpha;
 
 		} else {
 			// Initialize texture using width, height, channels, and texels
-			init(core, width, height, channels, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, texels);
+			init(core, width, height, channels, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, texels, false);
 		}
 
 		stbi_image_free(texels);

@@ -1,0 +1,19 @@
+cbuffer staticShadowMeshBuffer {
+	float4x4 W;
+	float4x4 VP;
+}
+
+struct VS_INPUT {
+	float4 Pos : POS;
+};
+
+struct PS_INPUT {
+	float4 Pos : SV_POSITION;
+};
+
+PS_INPUT VS(VS_INPUT input) {
+	PS_INPUT output;
+	output.Pos = mul(input.Pos, W);
+	output.Pos = mul(output.Pos, VP);
+	return output;
+}

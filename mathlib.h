@@ -583,6 +583,17 @@ public:
 		return mat;
 	}
 
+	static Matrix orthographicProj(float width, float height, float nr, float fr) {
+		Matrix mat;
+
+		mat[0] = 2 / width;
+		mat[5] = 2 / height;
+		mat[10] = 1 / (fr - nr);
+		mat[11] = -nr / (fr - nr);
+
+		return mat;
+	}
+
 	static Matrix lookAt(Vec3& from, Vec3& to) {
 		Vec3 dir = from - to;
 		dir.normalize();
@@ -644,10 +655,14 @@ public:
 		vec.normalize();
 		n = vec;
 
-		if (t.x == 1.f && t.y == 0.f && t.z == 0.f) {
-			b.y = 1.f;
+		if (n.x == 0.f && n.y == 1.f && n.z == 0.f) {
+			b.x = 0.f;
+			b.y = 0.f;
+			b.z = 1.f;
 		} else {
-			b.x = 1.f;
+			b.x = 0.f;
+			b.y = 1.f;
+			b.z = 0.f;
 		}
 
 		t = n.cross(b);
@@ -825,16 +840,17 @@ Quaternion slerp(Quaternion& q1, Quaternion& q2, float t) {
 	float dotProd = q1.dot(q2);
 
 	if (dotProd < 0.f) {
-		q1 = -q1;
+		q2 = -q2;
 		dotProd = -dotProd;
 	}
 
- 	float theta = acosf(dotProd);
-
-	if (abs(theta) < 0.01f) {
+	const float tolerance = 1e-6;
+	//if (dotProd < 0.01f) {
+	if (dotProd > 1.0f - tolerance) {
 		return (q1 * (1 - t) + q2 * t).normalize();
 	}
 
+	float theta = acosf(dotProd);
 	float oneOverSinTheta = 1.f / sinf(theta);
 
 	Quaternion ret = (q1 * (sinf(theta * (1.f - t)) * oneOverSinTheta)) + (q2 * (sinf(theta * t) * oneOverSinTheta));

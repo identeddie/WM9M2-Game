@@ -51,12 +51,12 @@ public:
 
 	Matrix interpolateBoneToGlobal(Matrix* matrices, int baseFrame, float interpolationFact, Skeleton* skeleton, int boneIndex) {
 		int nextFrameIndex = nextFrame(baseFrame);
-		//Matrix scale = Matrix::scaling(interpolate(frames[baseFrame].scales[boneIndex], frames[nextFrameIndex].scales[boneIndex], interpolationFact));
-		//Matrix rotation = interpolate(frames[baseFrame].rotations[boneIndex], frames[nextFrameIndex].rotations[boneIndex], interpolationFact).toMatrix();
-		//Matrix translation = Matrix::translation(interpolate(frames[baseFrame].positions[boneIndex], frames[nextFrameIndex].positions[boneIndex], interpolationFact));
-		Matrix scale = Matrix::scaling(frames[baseFrame].scales[boneIndex]);
-		Matrix rotation = frames[baseFrame].rotations[boneIndex].toMatrix();
-		Matrix translation = Matrix::translation(frames[baseFrame].positions[boneIndex]);
+		Matrix scale = Matrix::scaling(interpolate(frames[baseFrame].scales[boneIndex], frames[nextFrameIndex].scales[boneIndex], interpolationFact));
+		Matrix rotation = interpolate(frames[baseFrame].rotations[boneIndex], frames[nextFrameIndex].rotations[boneIndex], interpolationFact).toMatrix();
+		Matrix translation = Matrix::translation(interpolate(frames[baseFrame].positions[boneIndex], frames[nextFrameIndex].positions[boneIndex], interpolationFact));
+		//Matrix scale = Matrix::scaling(frames[baseFrame].scales[boneIndex]);
+		//Matrix rotation = frames[baseFrame].rotations[boneIndex].toMatrix();
+		//Matrix translation = Matrix::translation(frames[baseFrame].positions[boneIndex]);
 		Matrix local = scale * rotation * translation;
 
 		if (skeleton->bones[boneIndex].parentIndex > -1) {
