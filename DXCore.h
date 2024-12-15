@@ -141,6 +141,7 @@ public:
 		ZeroMemory(&rsdesc, sizeof(D3D11_RASTERIZER_DESC));
 		rsdesc.FillMode = D3D11_FILL_SOLID;
 		rsdesc.CullMode = D3D11_CULL_NONE;
+		rsdesc.DepthClipEnable = true;
 		device->CreateRasterizerState(&rsdesc, &rasterizerState);
 
 		devicecontext->RSSetState(rasterizerState);
@@ -155,6 +156,8 @@ public:
 	}
 
 	void renderToBackbuffer() {
+		ID3D11RenderTargetView* nullViews[3] = { nullptr };
+		devicecontext->OMSetRenderTargets(_countof(nullViews), nullViews, nullptr);
 		setRenderTarget(backbufferRenderTargetView);
 	}
 

@@ -22,10 +22,7 @@ PS_OUTPUT PS(PS_INPUT input) {
 	float4 color = tex.Sample(samplerLinear, input.TexCoords);
 	float3 mapNormal = tex_norm.Sample(samplerLinear, input.TexCoords).xyz;
 	mapNormal = mapNormal * 2.0 - 1.0;
-	
-	if (color.a < 0.5) {
-    		discard;
-	}
+
 
 	float3 normal = normalize(input.Normal);
 	float3 tangent = normalize(input.Tangent);

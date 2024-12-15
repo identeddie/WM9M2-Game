@@ -6,12 +6,16 @@ cbuffer animatedShadowMeshBuffer {
 
 struct VS_INPUT {
 	float4 Pos : POS;
+	float3 Normal : NORMAL;
+	float3 Tangent : TANGENT;
+	float2 TexCoords : TEXCOORD;
 	uint4 BoneIDs : BONEIDS;
 	float4 BoneWeights : BONEWEIGHTS;
 };
 
 struct PS_INPUT {
 	float4 Pos : SV_POSITION;
+	float2 TexCoords : TEXCOORD;
 };
 
 PS_INPUT VS(VS_INPUT input) {
@@ -24,5 +28,6 @@ PS_INPUT VS(VS_INPUT input) {
 	output.Pos = mul(input.Pos, transform);
 	output.Pos = mul(output.Pos, W);
 	output.Pos = mul(output.Pos, VP);
+	output.TexCoords = input.TexCoords;
 	return output;
 }

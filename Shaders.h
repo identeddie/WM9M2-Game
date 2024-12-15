@@ -67,9 +67,10 @@ public:
 		} else if (type == 2) { //Shader input latyout for Static Shadowmap Pass
 			D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
 				{ "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+				{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 			};
 
-			core->device->CreateInputLayout(layoutDesc, 1, compiledVertexShader->GetBufferPointer(), compiledVertexShader->GetBufferSize(), &layout);
+			core->device->CreateInputLayout(layoutDesc, 2, compiledVertexShader->GetBufferPointer(), compiledVertexShader->GetBufferSize(), &layout);
 
 		}
 		else if (type == 3) { //Shader input latyout for Animated Shadowmap Pass
@@ -77,9 +78,10 @@ public:
 				{ "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 				{ "BONEIDS", 0, DXGI_FORMAT_R32G32B32A32_UINT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 				{ "BONEWEIGHTS", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+				{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 			};
 
-			core->device->CreateInputLayout(layoutDesc, 3, compiledVertexShader->GetBufferPointer(), compiledVertexShader->GetBufferSize(), &layout);
+			core->device->CreateInputLayout(layoutDesc, 4, compiledVertexShader->GetBufferPointer(), compiledVertexShader->GetBufferSize(), &layout);
 
 		} else { //Shader input layout for Static Object
 			D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {

@@ -4,6 +4,7 @@
 #include "ShaderManager.h"
 #include "GEMLoader.h"
 #include "Animation.h"
+#include "Collisions.h"
 
 class Vertex {
 public:
@@ -25,6 +26,16 @@ struct ANIMATED_VERTEX {
 	Vec3 tangent;
 	float tu;
 	float tv;
+	unsigned int bonesIDs[4];
+	float boneWeights[4];
+};
+
+struct STATIC_SHADOW_VERTEX {
+	Vec3 pos;
+};
+
+struct ANIMATED_SHADOW_VERTEX {
+	Vec3 pos;
 	unsigned int bonesIDs[4];
 	float boneWeights[4];
 };
@@ -124,12 +135,30 @@ STATIC_VERTEX addVertex(Vec3 p, Vec3 n, float tu, float tv) {
 	return v;
 }
 
-class Plane {
+class Shape {
 public:
 	Mesh mesh;
-	Vec4 planarConstants;
+	std::vector<AABB> boundingBoxes;
+	Color color;
+	std::string texPath;
 
-	void init(DXCore* core, ShaderManager& shaders) {
+	float getRadius() {
+		return (boundingBoxes[0].max.x - boundingBoxes[0].min.x) / 2.f;
+	}
+
+	virtual void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj, float* t) {};
+	virtual void shadowDraw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {};
+	virtual void reflectionPass(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {};
+	virtual Shape* copy() const = 0;
+};
+
+class Plane : public Shape {
+public:
+	Plane* copy() const override {
+		return new Plane(*this);
+	}
+
+	void init(DXCore* core, ShaderManager& shaders, TextureManager& textures, std::string texturePath) {
 		std::vector<STATIC_VERTEX> vertices;
 		vertices.push_back(addVertex(Vec3(-150, 0, -150), Vec3(0, 1, 0), 0, 0));
 		vertices.push_back(addVertex(Vec3(150, 0, -150), Vec3(0, 1, 0), 1, 0));
@@ -140,20 +169,40 @@ public:
 		indices.push_back(1); indices.push_back(2); indices.push_back(3);
 		mesh.init(core, vertices, indices);
 
+		AABB boundingBox;
+
+		for (int i = 0; i < vertices.size(); i++) {
+			boundingBox.extend(vertices[i].pos);
+		}
+
+		boundingBoxes.push_back(boundingBox);
+
+		color = Color(0.f, 0.7f, 0.f);
+
 		Shader* shader = new Shader;
 		shader->init(core, "Shaders/vs_static.txt", "Shaders/ps_static.txt", 0);
 		shaders.addShader("static", shader);
 
+		Shader* tilingShader = new Shader;
+		tilingShader->init(core, "Shaders/vs_static.txt", "Shaders/ps_tex_tiling.txt", 0);
+		shaders.addShader("static_tex_tiling", tilingShader);
+
+		texPath = texturePath;
+		Texture* texture = new Texture;
+		texture->load(core, texturePath);
+		textures.addTexture(texturePath, texture);
+
 		Vec3 normal = vertices[0].normal.normalize();
 		float d = -dot(vertices[0].pos, normal);
-
-		planarConstants = Vec4(normal.x, normal.y, normal.z, d);
 	}
 
-	void draw(DXCore* core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
-		shaders.updateConstantVS("static", "staticMeshBuffer", "W", worldMat);
-		shaders.updateConstantVS("static", "staticMeshBuffer", "VP", viewProj);
-		shaders.apply(core, "static");
+	void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj, float* t) {
+		shaders.updateConstantVS("static_tex_tiling", "staticMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static_tex_tiling", "staticMeshBuffer", "VP", viewProj);
+		//shaders.updateConstantPS("static_tex", "colorBuff", "Color", &color);
+		shaders.apply(core, "static_tex_tiling");
+
+		shaders.shaders["static_tex_tiling"]->bindTexturePS(core, "tex", textures.find(texPath));
 		mesh.draw(core);
 	}
 
@@ -164,13 +213,23 @@ public:
 
 		mesh.draw(core);
 	}
+
+	void reflectionPass(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {
+		shaders.updateConstantVS("static_reflection", "staticMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static_reflection", "staticMeshBuffer", "VP", viewProj);
+		shaders.apply(core, "static_reflection");
+
+		mesh.draw(core);
+	}
 };
 
-class Cube {
+class Cube : public Shape {
 public:
-	Mesh mesh;
+	Cube* copy() const override {
+		return new Cube(*this);
+	}
 
-	void init(DXCore* core, ShaderManager& shaders) {
+	void init(DXCore* core, ShaderManager& shaders, TextureManager& textures) {
 		std::vector<STATIC_VERTEX> vertices;
 		Vec3 p0 = Vec3(-1.0f, -1.0f, -1.0f);
 		Vec3 p1 = Vec3(1.0f, -1.0f, -1.0f);
@@ -181,35 +240,35 @@ public:
 		Vec3 p6 = Vec3(1.0f, 1.0f, 1.0f);
 		Vec3 p7 = Vec3(-1.0f, 1.0f, 1.0f);
 
-		vertices.push_back(addVertex(p0, Vec3(0.0f, 0.0f, -1.0f), 0.0f, 1.0f));
-		vertices.push_back(addVertex(p1, Vec3(0.0f, 0.0f, -1.0f), 1.0f, 1.0f));
-		vertices.push_back(addVertex(p2, Vec3(0.0f, 0.0f, -1.0f), 1.0f, 0.0f));
-		vertices.push_back(addVertex(p3, Vec3(0.0f, 0.0f, -1.0f), 0.0f, 0.0f));
+		vertices.push_back(addVertex(p0 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, 0.0f, -1.0f), 0.0f, 1.0f));
+		vertices.push_back(addVertex(p1 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, 0.0f, -1.0f), 1.0f, 1.0f));
+		vertices.push_back(addVertex(p2 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, 0.0f, -1.0f), 1.0f, 0.0f));
+		vertices.push_back(addVertex(p3 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, 0.0f, -1.0f), 0.0f, 0.0f));
 
-		vertices.push_back(addVertex(p5, Vec3(0.0f, 0.0f, 1.0f), 0.0f, 1.0f));
-		vertices.push_back(addVertex(p4, Vec3(0.0f, 0.0f, 1.0f), 1.0f, 1.0f));
-		vertices.push_back(addVertex(p7, Vec3(0.0f, 0.0f, 1.0f), 1.0f, 0.0f));
-		vertices.push_back(addVertex(p6, Vec3(0.0f, 0.0f, 1.0f), 0.0f, 0.0f));
+		vertices.push_back(addVertex(p5 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, 0.0f, 1.0f), 0.0f, 1.0f));
+		vertices.push_back(addVertex(p4 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, 0.0f, 1.0f), 1.0f, 1.0f));
+		vertices.push_back(addVertex(p7 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, 0.0f, 1.0f), 1.0f, 0.0f));
+		vertices.push_back(addVertex(p6 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, 0.0f, 1.0f), 0.0f, 0.0f));
 
-		vertices.push_back(addVertex(p4, Vec3(-1.0f, 0.0f, 0.0f), 0.0f, 1.0f));
-		vertices.push_back(addVertex(p0, Vec3(-1.0f, 0.0f, 0.0f), 1.0f, 1.0f));
-		vertices.push_back(addVertex(p3, Vec3(-1.0f, 0.0f, 0.0f), 1.0f, 0.0f));
-		vertices.push_back(addVertex(p7, Vec3(-1.0f, 0.0f, 0.0f), 0.0f, 0.0f));
+		vertices.push_back(addVertex(p4 + Vec3(0.f, 1.f, 0.f), Vec3(-1.0f, 0.0f, 0.0f), 0.0f, 1.0f));
+		vertices.push_back(addVertex(p0 + Vec3(0.f, 1.f, 0.f), Vec3(-1.0f, 0.0f, 0.0f), 1.0f, 1.0f));
+		vertices.push_back(addVertex(p3 + Vec3(0.f, 1.f, 0.f), Vec3(-1.0f, 0.0f, 0.0f), 1.0f, 0.0f));
+		vertices.push_back(addVertex(p7 + Vec3(0.f, 1.f, 0.f), Vec3(-1.0f, 0.0f, 0.0f), 0.0f, 0.0f));
 
-		vertices.push_back(addVertex(p1, Vec3(1.0f, 0.0f, 0.0f), 0.0f, 1.0f));
-		vertices.push_back(addVertex(p5, Vec3(1.0f, 0.0f, 0.0f), 1.0f, 1.0f));
-		vertices.push_back(addVertex(p6, Vec3(1.0f, 0.0f, 0.0f), 1.0f, 0.0f));
-		vertices.push_back(addVertex(p2, Vec3(1.0f, 0.0f, 0.0f), 0.0f, 0.0f));
+		vertices.push_back(addVertex(p1 + Vec3(0.f, 1.f, 0.f), Vec3(1.0f, 0.0f, 0.0f), 0.0f, 1.0f));
+		vertices.push_back(addVertex(p5 + Vec3(0.f, 1.f, 0.f), Vec3(1.0f, 0.0f, 0.0f), 1.0f, 1.0f));
+		vertices.push_back(addVertex(p6 + Vec3(0.f, 1.f, 0.f), Vec3(1.0f, 0.0f, 0.0f), 1.0f, 0.0f));
+		vertices.push_back(addVertex(p2 + Vec3(0.f, 1.f, 0.f), Vec3(1.0f, 0.0f, 0.0f), 0.0f, 0.0f));
 
-		vertices.push_back(addVertex(p3, Vec3(0.0f, 1.0f, 0.0f), 0.0f, 1.0f));
-		vertices.push_back(addVertex(p2, Vec3(0.0f, 1.0f, 0.0f), 1.0f, 1.0f));
-		vertices.push_back(addVertex(p6, Vec3(0.0f, 1.0f, 0.0f), 1.0f, 0.0f));
-		vertices.push_back(addVertex(p7, Vec3(0.0f, 1.0f, 0.0f), 0.0f, 0.0f));
+		vertices.push_back(addVertex(p3 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, 1.0f, 0.0f), 0.0f, 1.0f));
+		vertices.push_back(addVertex(p2 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, 1.0f, 0.0f), 1.0f, 1.0f));
+		vertices.push_back(addVertex(p6 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, 1.0f, 0.0f), 1.0f, 0.0f));
+		vertices.push_back(addVertex(p7 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, 1.0f, 0.0f), 0.0f, 0.0f));
 
-		vertices.push_back(addVertex(p4, Vec3(0.0f, -1.0f, 0.0f), 0.0f, 1.0f));
-		vertices.push_back(addVertex(p5, Vec3(0.0f, -1.0f, 0.0f), 1.0f, 1.0f));
-		vertices.push_back(addVertex(p1, Vec3(0.0f, -1.0f, 0.0f), 1.0f, 0.0f));
-		vertices.push_back(addVertex(p0, Vec3(0.0f, -1.0f, 0.0f), 0.0f, 0.0f));
+		vertices.push_back(addVertex(p4 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, -1.0f, 0.0f), 0.0f, 1.0f));
+		vertices.push_back(addVertex(p5 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, -1.0f, 0.0f), 1.0f, 1.0f));
+		vertices.push_back(addVertex(p1 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, -1.0f, 0.0f), 1.0f, 0.0f));
+		vertices.push_back(addVertex(p0 + Vec3(0.f, 1.f, 0.f), Vec3(0.0f, -1.0f, 0.0f), 0.0f, 0.0f));
 
 		std::vector<unsigned int> indices;
 		indices.push_back(0); indices.push_back(1); indices.push_back(2);
@@ -225,31 +284,66 @@ public:
 		indices.push_back(20); indices.push_back(21); indices.push_back(22);
 		indices.push_back(20); indices.push_back(22); indices.push_back(23);
 
+		AABB boundingBox;
+
+		for (int i = 0; i < vertices.size(); i++) {
+			boundingBox.extend(vertices[i].pos);
+		}
+
+		boundingBoxes.push_back(boundingBox);
+
 		mesh.init(core, vertices, indices);
 
+		color = Color(0.f, 0.f, 0.6f);
+
 		Shader* shader = new Shader;
-		shader->init(core, "Shaders/vs_static.txt", "Shaders/ps_static.txt", 0);
-		shaders.addShader("static", shader);
+		shader->init(core, "Shaders/vs_static.txt", "Shaders/ps_textured.txt", 0);
+		shaders.addShader("static_tex", shader);
+
+		Texture* brickAlbedo = new Texture;
+		brickAlbedo->load(core, "Textures/rounded-brick1-albedo.png");
+		textures.addTexture("brick_albedo", brickAlbedo);
+
+		Texture* brickNormal = new Texture;
+		brickNormal->load(core, "Textures/rounded-brick1-normal.png");
+		textures.addTexture("brick_normal", brickNormal);
 	}
 
-	void draw(DXCore* core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
-		shaders.updateConstantVS("static", "staticMeshBuffer", "W", worldMat);
-		shaders.updateConstantVS("static", "staticMeshBuffer", "VP", viewProj);
-		shaders.apply(core, "static");
+	void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj, float* t) {
+		shaders.updateConstantVS("static_tex", "staticMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static_tex", "staticMeshBuffer", "VP", viewProj);
+		shaders.updateConstantPS("static_tex", "colorBuff", "Color", &color);
+		shaders.apply(core, "static_tex");
+
+		shaders.shaders["static_tex"]->bindTexturePS(core, "tex", textures.find("brick_albedo"));
+		shaders.shaders["static_tex"]->bindTexturePS(core, "tex_norm", textures.find("brick_normal"));
 		mesh.draw(core);
 	}
 
-	void shadowDraw(DXCore* core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
+	void shadowDraw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {
 		shaders.updateConstantVS("static_shadow", "staticShadowMeshBuffer", "W", worldMat);
 		shaders.updateConstantVS("static_shadow", "staticShadowMeshBuffer", "VP", viewProj);
 		shaders.apply(core, "static_shadow");
+
+		shaders.shaders["static_shadow"]->bindTexturePS(core, "tex", textures.find("brick_albedo"));
+		mesh.draw(core);
+	}
+
+	void reflectionPass(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {
+		shaders.updateConstantVS("static_reflection", "staticMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static_reflection", "staticMeshBuffer", "VP", viewProj);
+		shaders.apply(core, "static_reflection");
+
+		shaders.shaders["static_reflection"]->bindTexturePS(core, "tex", textures.find("brick_albedo"));
 		mesh.draw(core);
 	}
 };
 
-class Sphere {
+class Sphere : public Shape {
 public:
-	Mesh mesh;
+	Sphere* copy() const override {
+		return new Sphere(*this);
+	}
 
 	void init(DXCore* core, ShaderManager& shaders, int rings, int segments, int radius) {
 		std::vector<STATIC_VERTEX> vertices;
@@ -264,10 +358,11 @@ public:
 				float sinPhi = sinf(phi);
 				float cosPhi = cosf(phi);
 				Vec3 position(radius * sinTheta * cosPhi, radius * cosTheta, radius * sinTheta * sinPhi);
-				Vec3 normal = position.normalize();
+				Vec3 normal = position;
+				normal.normalize();
 				float tu = 1.0f - (float)lon / segments;
 				float tv = 1.0f - (float)lat / rings;
-				vertices.push_back(addVertex(position, normal, tu, tv));
+				vertices.push_back(addVertex(position + Vec3(0.f, radius, 0.f), normal, tu, tv));
 			}
 		}
 
@@ -288,16 +383,41 @@ public:
 
 		mesh.init(core, vertices, indices);
 
+		AABB boundingBox;
+
+		for (int i = 0; i < vertices.size(); i++) {
+			boundingBox.extend(vertices[i].pos);
+		}
+
+		boundingBoxes.push_back(boundingBox);
+
+		color = Color(0.7f, 0.f, 0.f);
+
 		Shader* shader = new Shader;
-		shader->init(core, "Shaders/vs_static.txt", "Shaders/ps_static_pulse.txt", 0);
+		shader->init(core, "Shaders/vs_static.txt", "Shaders/ps_static.txt", 0);
 		shaders.addShader("static_pulse", shader);
 	}
 
-	void draw(DXCore* core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj, float* time) {
-		shaders.updateConstantVS("static_pulse", "staticMeshBuffer", "W", worldMat);
-		shaders.updateConstantVS("static_pulse", "staticMeshBuffer", "VP", viewProj);
-		shaders.updateConstantPS("static_pulse", "timeBuff", "time", time);
-		shaders.apply(core, "static_pulse");
+	void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj, float* time) {
+		shaders.updateConstantVS("static", "staticMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static", "staticMeshBuffer", "VP", viewProj);
+		shaders.updateConstantPS("static", "colorBuff", "Color", &color);
+		shaders.apply(core, "static");
+		mesh.draw(core);
+	}
+
+	void shadowDraw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {
+		shaders.updateConstantVS("static_shadow", "staticShadowMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static_shadow", "staticShadowMeshBuffer", "VP", viewProj);
+		shaders.apply(core, "static_shadow");
+		mesh.draw(core);
+	}
+
+	void reflectionPass(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {
+		shaders.updateConstantVS("static_reflection", "staticMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static_reflection", "staticMeshBuffer", "VP", viewProj);
+		shaders.apply(core, "static_reflection");
+
 		mesh.draw(core);
 	}
 };
@@ -319,7 +439,8 @@ public:
 				float sinPhi = sinf(phi);
 				float cosPhi = cosf(phi);
 				Vec3 position(radius * sinTheta * cosPhi, radius * cosTheta, radius * sinTheta * sinPhi);
-				Vec3 normal = position.normalize();
+				Vec3 normal = position;
+				normal.normalize();
 				float tu = 1.0f - (float)lon / segments;
 				float tv = 1.0f - (float)lat / rings;
 				vertices.push_back(addVertex(position, normal, tu, tv));
@@ -344,12 +465,21 @@ public:
 		mesh.init(core, vertices, indices);
 
 		Shader* shader = new Shader;
-		shader->init(core, "Shaders/vs_static.txt", "Shaders/ps_textured.txt", false);
+		shader->init(core, "Shaders/vs_static.txt", "Shaders/ps_textured_sky.txt", false);
 		shaders.addShader("static_sky", shader);
 
 		Texture* texture = new Texture;
 		texture->load(core, "Textures/sky.png");
 		textures.addTexture("Textures/sky.png", texture);
+	}
+
+	void reflectionPass(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {
+		shaders.updateConstantVS("static_reflection", "staticMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static_reflection", "staticMeshBuffer", "VP", viewProj);
+		shaders.apply(core, "static_reflection");
+
+		shaders.shaders["static_reflection"]->bindTexturePS(core, "tex", textures.find("Textures/sky.png"));
+		mesh.draw(core);
 	}
 
 	void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj, float* time) {
@@ -368,6 +498,11 @@ public:
 	std::vector<Mesh> meshes;
 	std::vector<std::string> textureFilenames;
 	std::vector<std::string> normalTextureFilenames;
+	std::vector<AABB> boundingBoxes;
+
+	StaticModel* copy() const {
+		return new StaticModel(*this);
+	}
 
 	void init(DXCore* core, ShaderManager& shaders, TextureManager& textures, std::string modelFile) {
 		GEMLoader::GEMModelLoader loader;
@@ -388,11 +523,20 @@ public:
 			normalTextureFilenames.push_back(gemmeshes[i].material.find("normals").getValue());
 			mesh.init(core, vertices, gemmeshes[i].indices);
 			meshes.push_back(mesh);
+
+			AABB boundingBox;
+
+			for (int i = 0; i < vertices.size(); i++) {
+				boundingBox.extend(vertices[i].pos);
+			}
+
+			boundingBoxes.push_back(boundingBox);
+			boundingBoxes[i].reduceXY(0.5f, 0.5f); //make tree base bounding box smaller
 		}
 
 		Shader* shader = new Shader;
-		shader->init(core, "Shaders/vs_static_movement.txt", "Shaders/ps_textured.txt", 0);
-		shaders.addShader("static_tex", shader);
+		shader->init(core, "Shaders/vs_static_movement.txt", "Shaders/ps_textured_nomapping.txt", 0);
+		shaders.addShader("static_tex_movement", shader);
 
 		for (int i = 0; i < textureFilenames.size(); i++) {
 			Texture* texture = new Texture;
@@ -408,10 +552,40 @@ public:
 	}
 
 	void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj, float* time) {
-		shaders.updateConstantVS("static_tex", "staticMeshBuffer", "W", worldMat);
-		shaders.updateConstantVS("static_tex", "staticMeshBuffer", "VP", viewProj);
-		//shaders.updateConstantVS("static_tex", "staticMeshBuffer", "time", time);
-		shaders.apply(core, "static_tex");
+		shaders.updateConstantVS("static_tex_movement", "staticMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static_tex_movement", "staticMeshBuffer", "VP", viewProj);
+		shaders.updateConstantVS("static_tex_movement", "staticMeshBuffer", "time", time);
+		shaders.apply(core, "static_tex_movement");
+
+		for (int i = 0; i < meshes.size(); i++) {
+			shaders.shaders["static_tex_movement"]->bindTextureVS(core, "tex", textures.find(textureFilenames[i]));
+
+			ID3D11ShaderResourceView* views[2];
+			views[0] = textures.find(textureFilenames[i]);
+			views[1] = textures.find(normalTextureFilenames[i]);
+			core->devicecontext->PSSetShaderResources(0, 2, views);
+
+			//shaders.shaders["static_tex"]->bindTexturePS(core, "tex", textures.find(textureFilenames[i]));
+			//shaders.shaders["static_tex"]->bindTexturePS(core, "tex_norm", textures.find(normalTextureFilenames[i]));
+			meshes[i].draw(core);
+		}
+	}
+
+	void shadowDraw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {
+		shaders.updateConstantVS("static_shadow", "staticShadowMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static_shadow", "staticShadowMeshBuffer", "VP", viewProj);
+		shaders.apply(core, "static_shadow");
+
+		for (int i = 0; i < meshes.size(); i++) {
+			shaders.shaders["static_shadow"]->bindTexturePS(core, "tex", textures.find(textureFilenames[i]));
+			meshes[i].draw(core);
+		}
+	}
+
+	void reflectionPass(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {
+		shaders.updateConstantVS("static_reflection", "staticMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("static_reflection", "staticMeshBuffer", "VP", viewProj);
+		shaders.apply(core, "static_reflection");
 
 		for (int i = 0; i < meshes.size(); i++) {
 			shaders.shaders["static_tex"]->bindTextureVS(core, "tex", textures.find(textureFilenames[i]));
@@ -427,15 +601,6 @@ public:
 		}
 	}
 
-	void shadowDraw(DXCore* core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
-		shaders.updateConstantVS("static_shadow", "staticShadowMeshBuffer", "W", worldMat);
-		shaders.updateConstantVS("static_shadow", "staticShadowMeshBuffer", "VP", viewProj);
-		shaders.apply(core, "static_shadow");
-
-		for (int i = 0; i < meshes.size(); i++) {
-			meshes[i].draw(core);
-		}
-	}
 };
 
 class AnimatedModel {
@@ -444,6 +609,7 @@ public:
 	Animation animation;
 	std::vector<std::string> textureFilenames;
 	std::vector<std::string> normalTextureFilenames;
+	std::vector<AABB> boundingBoxes;
 
 	void init(DXCore* core, ShaderManager& shaders, TextureManager& textures, std::string modelFile) {
 		GEMLoader::GEMModelLoader loader;
@@ -465,6 +631,14 @@ public:
 			normalTextureFilenames.push_back(gemmeshes[i].material.find("normals").getValue());
 			mesh.init(core, vertices, gemmeshes[i].indices);
 			meshes.push_back(mesh);
+
+			AABB boundingBox;
+
+			for (int i = 0; i < vertices.size(); i++) {
+				boundingBox.extend(vertices[i].pos);
+			}
+
+			boundingBoxes.push_back(boundingBox);
 		}
 
 		for (int i = 0; i < gemanimation.bones.size(); i++) {
@@ -524,10 +698,19 @@ class AnimatedModelInstance {
 public:
 	AnimatedModel* model;
 	AnimationInstance instance;
+	std::vector<AABB> boundingBoxes;
+
+	//Vec3 pos;
+	//Vec3 scale;
+
+	AnimatedModelInstance* copy() const {
+		return new AnimatedModelInstance(*this);
+	}
 
 	void init(AnimatedModel* _model) {
 		model = _model;
 		instance.init(&model->animation);
+		boundingBoxes = model->boundingBoxes;
 	}
 
 	void changeAnimation(std::string animation) {
@@ -542,7 +725,7 @@ public:
 		instance.update(instance.currentAnimation, dt);
 	}
 
-	void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj, float dt) {
+	void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj, float* dt) {
 		//instance.update(instance.currentAnimation, dt);
 
 		shaders.updateConstantVS("animated", "animatedMeshBuffer", "W", worldMat);
@@ -563,42 +746,304 @@ public:
 		}
 	}
 
-	void shadowDraw(DXCore* core, ShaderManager& shaders, Matrix* worldMat, Matrix* viewProj) {
+	void reflectionPass(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {
+		shaders.updateConstantVS("animated_reflection", "animatedMeshBuffer", "W", worldMat);
+		shaders.updateConstantVS("animated_reflection", "animatedMeshBuffer", "VP", viewProj);
+		shaders.updateConstantVS("animated_reflection", "animatedMeshBuffer", "bones", instance.matrices);
+		shaders.apply(core, "animated_reflection");
+
+		for (int i = 0; i < model->meshes.size(); i++) {
+			shaders.shaders["animated_reflection"]->bindTextureVS(core, "tex", textures.find(model->textureFilenames[i]));
+
+			ID3D11ShaderResourceView* views[2];
+			views[0] = textures.find(model->textureFilenames[i]);
+			views[1] = textures.find(model->normalTextureFilenames[i]);
+			core->devicecontext->PSSetShaderResources(0, 2, views);
+
+			//shaders.shaders["static_tex"]->bindTexturePS(core, "tex", textures.find(textureFilenames[i]));
+			//shaders.shaders["static_tex"]->bindTexturePS(core, "tex_norm", textures.find(normalTextureFilenames[i]));
+			model->meshes[i].draw(core);
+		}
+	}
+
+	void shadowDraw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* worldMat, Matrix* viewProj) {
 		shaders.updateConstantVS("animated_shadow", "animatedShadowMeshBuffer", "W", worldMat);
 		shaders.updateConstantVS("animated_shadow", "animatedShadowMeshBuffer", "VP", viewProj);
 		shaders.updateConstantVS("animated_shadow", "animatedShadowMeshBuffer", "bones", instance.matrices);
 		shaders.apply(core, "animated_shadow");
-		core->devicecontext->PSSetShader(NULL, NULL, 0);
+		//core->devicecontext->PSSetShader(NULL, NULL, 0);
 
 		for (int i = 0; i < model->meshes.size(); i++) {
+			shaders.shaders["animated_shadow"]->bindTexturePS(core, "tex", textures.find(model->textureFilenames[i]));
 			model->meshes[i].draw(core);
 		}
 	}
 };
 
+class ReflectionPlane : public Plane {
+public:
+	Matrix F;
+	Vec3 pos;
+	Vec4 planarConstants;
+
+	void init(DXCore* core, ShaderManager& shaders, TextureManager& textures, int width) {
+		pos = Vec3(40.f, 0.1f, 40.f);
+
+		std::vector<STATIC_VERTEX> vertices;
+		vertices.push_back(addVertex(Vec3(-width / 2, 0, -width / 2), Vec3(0, 1, 0), 0, 0));
+		vertices.push_back(addVertex(Vec3(width / 2, 0, -width / 2), Vec3(0, 1, 0), 1, 0));
+		vertices.push_back(addVertex(Vec3(-width / 2, 0, width / 2), Vec3(0, 1, 0), 0, 1));
+		vertices.push_back(addVertex(Vec3(width / 2, 0, width / 2), Vec3(0, 1, 0), 1, 1));
+		std::vector<unsigned int> indices;
+		indices.push_back(2); indices.push_back(1); indices.push_back(0);
+		indices.push_back(1); indices.push_back(2); indices.push_back(3);
+		mesh.init(core, vertices, indices);
+
+		AABB boundingBox;
+
+		for (int i = 0; i < vertices.size(); i++) {
+			boundingBox.extend(vertices[i].pos);
+		}
+
+		boundingBoxes.push_back(boundingBox);
+
+		color = Color(0.f, 0.f, 0.8f);
+
+		Shader* shader = new Shader;
+		shader->init(core, "Shaders/vs_static.txt", "Shaders/ps_reflectionplane.txt", 0);
+		shaders.addShader("reflectionPlane", shader);
+
+		Vec3 normal = vertices[0].normal.normalize();
+		float d = -dot(vertices[0].pos, normal);
+
+		planarConstants = Vec4(normal.x, normal.y, normal.z, d);
+		Vec4 u = planarConstants;
+
+		Matrix T;
+		T[0] = 1 - 2 * sq(u.x);
+		T[1] = -2 * u.x * u.y;
+		T[2] = -2 * u.x * u.z;
+		T[4] = T[1];
+		T[5] = 1 - 2 * sq(u.y);
+		T[6] = -2 * u.y * u.z;
+		T[8] = T[2];
+		T[9] = T[6];
+		T[10] = 1 - 2 * sq(u.z);
+		T[12] = -2 * u.x * u.w;
+		T[13] = -2 * u.y * u.w;
+		T[14] = -2 * u.z * u.w;
+
+		F = T;
+
+		Texture* waterNormal = new Texture;
+		waterNormal->load(core, "Textures/watertex.gif");
+		textures.addTexture("water", waterNormal);
+
+		Texture* waterUnder = new Texture;
+		waterUnder->load(core, "Textures/underwater.png");
+		textures.addTexture("underwater", waterUnder);
+	}
+
+	void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* viewProj, Vec2* offsets) {
+		Matrix worldMat = Matrix::translation(pos);
+		shaders.updateConstantVS("reflectionPlane", "staticMeshBuffer", "W", &worldMat);
+		shaders.updateConstantVS("reflectionPlane", "staticMeshBuffer", "VP", viewProj);
+		shaders.updateConstantPS("reflectionPlane", "uvOffsetBuff", "offsets", offsets);
+		shaders.apply(core, "reflectionPlane");
+
+		shaders.shaders["reflectionPlane"]->bindTexturePS(core, "tex", textures.find("reflection"));
+		shaders.shaders["reflectionPlane"]->bindTexturePS(core, "tex_norm", textures.find("water"));
+		shaders.shaders["reflectionPlane"]->bindTexturePS(core, "tex_under", textures.find("underwater"));
+		//core->devicecontext->PSSetShaderResources(0, 1, textures.find("reflection"));
+		mesh.draw(core);
+	}
+};
+
 class FullScreenQuad {
 public:
-	void draw(DXCore* core, ShaderManager& shaders, GBuffer& gBuffer, Vec3* lightPos, Color* lightColor, Matrix* invView) {
+	void draw(DXCore* core, ShaderManager& shaders, GBuffer& gBuffer, Vec3* sunPos, Vec4* lightPos, Color* lightColor, Matrix* sunVP) {
+		shaders.updateConstantPS("fsq", "lightingBuffer", "sunPos", sunPos);
 		shaders.updateConstantPS("fsq", "lightingBuffer", "lightPos", lightPos);
 		shaders.updateConstantPS("fsq", "lightingBuffer", "lightColor", lightColor);
-		shaders.updateConstantPS("fsq", "lightingBuffer", "invView", invView);
+		shaders.updateConstantPS("fsq", "lightingBuffer", "sunVP", sunVP);
 		shaders.apply(core, "fsq");
-		core->devicecontext->PSSetShaderResources(0, 3, gBuffer.shaderResourceViews);
+		core->devicecontext->PSSetShaderResources(0, 4, gBuffer.shaderResourceViews);
 		core->devicecontext->IASetInputLayout(NULL); // Input layout is not used for fullscreen triangles
 		core->devicecontext->Draw(3, 0);
 	}
 };
 
-class ModelManager {
+template <typename T>
+class Object {
 public:
-	std::vector<StaticModel> staticModels;
-	std::vector<AnimatedModelInstance> animatedModels;
+	T* model;
+	Vec3 pos;
+	Vec3 scale;
 
-	void addStaticModel(StaticModel& model) {
-		staticModels.push_back(model);
+	Object(T* _model) {
+		model = _model->copy();
+		pos = Vec3(0.f, 0.f, 0.f);
+		scale = Vec3(1.f, 1.f, 1.f);
 	}
 
-	void addAnimatedModel(AnimatedModelInstance& model) {
+	Object(T* _model, const Vec3& _pos) {
+		model = _model->copy();
+		pos = _pos;
+		scale = Vec3(1.f, 1.f, 1.f);
+	}
+
+	Object(T* _model, const Vec3& _pos, const Vec3& _scale) {
+		model = _model->copy();
+		pos = _pos;
+		scale = _scale;
+
+		for (int i = 0; i < model->boundingBoxes.size(); i++) {
+			model->boundingBoxes[i].max = Matrix::scaling(scale).mulPoint(model->boundingBoxes[i].max);
+			model->boundingBoxes[i].min = Matrix::scaling(scale).mulPoint(model->boundingBoxes[i].min);
+		}
+	}
+
+	void move(const Vec3& dx) {
+		pos += dx;
+		
+		/*for (int i = 0; i < model->boundingBoxes.size(); i++) {
+			model->boundingBoxes[i] += dx;
+		}*/
+	}
+
+	void resize(float k) {
+		scale *= k;
+	}
+
+	void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* viewProj, float* time) {
+		Matrix worldMat = Matrix::scaling(scale) * Matrix::translation(pos);
+		model->draw(core, shaders, textures, &worldMat, viewProj, time);
+	}
+
+	void shadowDraw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* viewProj) {
+		Matrix worldMat = Matrix::scaling(scale) * Matrix::translation(pos);
+		model->shadowDraw(core, shaders, textures, &worldMat, viewProj);
+	}
+
+	void reflectionPass(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* viewProj) {
+		Matrix worldMat = Matrix::scaling(scale) * Matrix::translation(pos);
+		model->reflectionPass(core, shaders, textures, &worldMat, viewProj);
+	}
+};
+
+template <typename T1, typename T2>
+void checkCollision(Object<T1>* obj1, Object<T2>* obj2) {
+	for (int i = 0; i < obj1->model->boundingBoxes.size(); i++) {
+		AABB bb1 = obj1->model->boundingBoxes[i] + obj1->pos;
+		for (int j = 0; j < obj2->model->boundingBoxes.size(); j++) {
+			AABB bb2 = obj2->model->boundingBoxes[j] + obj2->pos;
+			Vec3 norm = bb1.checkCollision(bb2);
+
+			if (norm.x != 0.f && norm.y != 0.f && norm.z != 0.f) {
+				Vec3 normAbs(abs(norm.x), abs(norm.y), abs(norm.z));
+				float minDiff = normAbs.Min();
+
+				if (minDiff == abs(norm.x)) {
+					norm = Vec3(norm.x, 0.f, 0.f);
+				} else /*if (minDiff == abs(norm.z))*/ {
+					norm = Vec3(0.f, 0.f, norm.z);
+				}
+				// else {
+				//	//norm = Vec3(0.f, 0.f, norm.z);
+				//	norm = Vec3(0.f);
+				//}
+
+				obj1->move(norm);
+			}
+		}
+	}
+}
+
+class ModelManager {
+public:
+	std::vector<Object<StaticModel>*> staticInstances;
+	std::vector<Object<AnimatedModelInstance>*> animatedInstances;
+	std::vector<Object<Shape>*> shapeInstances;
+	std::vector<AnimatedModel*> animatedModels;
+
+	void addAnimatedModel(AnimatedModel _model) {
+		AnimatedModel* model = new AnimatedModel(_model);
 		animatedModels.push_back(model);
+	}
+
+	void addStaticInstance(Object<StaticModel>* inst) {
+		staticInstances.push_back(inst);
+	}
+
+	void addAnimatedInstance(Object<AnimatedModelInstance>* inst) {
+		animatedInstances.push_back(inst);
+	}
+
+	void addShapeInstance(Object<Shape>* inst) {
+		shapeInstances.push_back(inst);
+	}
+
+	void updateAnimation(float dt) {
+		for (int i = 0; i < animatedInstances.size(); i++) {
+			animatedInstances[i]->model->update(dt);
+		}
+	}
+
+	void handleCollision() {
+		for (int i = 0; i < shapeInstances.size(); i++) {
+			if (i < shapeInstances.size() - 1) {
+				checkCollision(shapeInstances[i], shapeInstances[i + 1]);
+			}
+
+			for (int j = 0; j < staticInstances.size(); j++) {
+				checkCollision(shapeInstances[i], staticInstances[j]);
+			}
+
+			for (int j = 0; j < animatedInstances.size(); j++) {
+				checkCollision(shapeInstances[i], animatedInstances[j]);
+			}
+		}
+	}
+
+	void draw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* viewProj, float* time, float* dt) {
+		for (int i = 0; i < staticInstances.size(); i++) {
+			staticInstances[i]->draw(core, shaders, textures, viewProj, time);
+		}
+
+		for (int i = 0; i < animatedInstances.size(); i++) {
+			animatedInstances[i]->draw(core, shaders, textures, viewProj, dt);
+		}
+
+		for (int i = 0; i < shapeInstances.size(); i++) {
+			shapeInstances[i]->draw(core, shaders, textures, viewProj, time);
+		}
+	}
+
+	void shadowDraw(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* viewProj) {
+		for (int i = 0; i < staticInstances.size(); i++) {
+			staticInstances[i]->shadowDraw(core, shaders, textures, viewProj);
+		}
+
+		for (int i = 0; i < animatedInstances.size(); i++) {
+			animatedInstances[i]->shadowDraw(core, shaders, textures, viewProj);
+		}
+
+		for (int i = 0; i < shapeInstances.size(); i++) {
+			shapeInstances[i]->shadowDraw(core, shaders, textures, viewProj);
+		}
+	}
+
+	void reflectionPass(DXCore* core, ShaderManager& shaders, TextureManager& textures, Matrix* viewProj) {
+		for (int i = 0; i < staticInstances.size(); i++) {
+			staticInstances[i]->reflectionPass(core, shaders, textures, viewProj);
+		}
+
+		for (int i = 0; i < animatedInstances.size(); i++) {
+			animatedInstances[i]->reflectionPass(core, shaders, textures, viewProj);
+		}
+
+		for (int i = 0; i < shapeInstances.size(); i++) {
+			shapeInstances[i]->reflectionPass(core, shaders, textures, viewProj);
+		}
 	}
 };

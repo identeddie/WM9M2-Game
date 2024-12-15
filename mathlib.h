@@ -573,12 +573,12 @@ public:
 	static Matrix perspectiveProj(float aspect, float fovTheta, float nr, float fr) { //nr (near), fr (far)
 		Matrix mat;
 
-		mat[0] = 1 / (aspect * tanf(fovTheta / 2));
-		mat[5] = 1 / tanf(fovTheta / 2);
+		mat[0] = 1.f / (aspect * tanf(fovTheta / 2.f));
+		mat[5] = 1.f / tanf(fovTheta / 2.f);
 		mat[10] = -fr / (fr - nr);
 		mat[11] = -fr * nr / (fr - nr);
 		mat[14] = -1.f;
-		mat[15] = 0;
+		mat[15] = 0.f;
 
 		return mat;
 	}
@@ -586,10 +586,11 @@ public:
 	static Matrix orthographicProj(float width, float height, float nr, float fr) {
 		Matrix mat;
 
-		mat[0] = 2 / width;
-		mat[5] = 2 / height;
-		mat[10] = 1 / (fr - nr);
+		mat[0] = 2.f / width;
+		mat[5] = 2.f / height;
+		mat[10] = 1.f / (fr - nr);
 		mat[11] = -nr / (fr - nr);
+		mat[15] = 1.f;
 
 		return mat;
 	}
@@ -655,7 +656,7 @@ public:
 		vec.normalize();
 		n = vec;
 
-		if (n.x == 0.f && n.y == 1.f && n.z == 0.f) {
+		if ((n.x == 0.f && n.y == 1.f && n.z == 0.f) || n.x == 0.f && n.y == -1.f && n.z == 0.f) {
 			b.x = 0.f;
 			b.y = 0.f;
 			b.z = 1.f;

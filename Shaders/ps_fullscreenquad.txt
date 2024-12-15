@@ -3,13 +3,15 @@
 Texture2D tex_albedo : register(t0);
 Texture2D tex_normal : register(t1);
 Texture2D tex_world_pos : register(t2);
+Texture2D tex_shadowmap : register(t3);
 
 SamplerState samplerLinear : register(s0);
 
 cbuffer lightingBuffer {
-	float3 lightPos;
-	float3 lightColor;
-	float4x4 invView;
+	float3 sunPos;
+	float3 lightPos[4];
+	float4 lightColor[4];
+	float4x4 sunVP;
 }
 
 struct PS_INPUT {
@@ -19,18 +21,31 @@ struct PS_INPUT {
 
 float4 PS(PS_INPUT input) : SV_Target0 {
 	float4 color = tex_albedo.Sample(samplerLinear, input.TexCoords);
-	return color;
+
 	if (color.a == 0) {
 		discard;
 	}
 
 	float3 normal = tex_normal.Sample(samplerLinear, input.TexCoords).xyz;
-	normal = normal * 2.0 - 1.0;
-	float3 worldPos = tex_world_pos.Sample(samplerLinear, input.TexCoords).xyz;
+ 	float4 worldPos = tex_world_pos.Sample(samplerLinear, input.TexCoords);
 
-	float3 diff = lightPos - worldPos;
-	float3 omega = diff / length(diff);
+	float4 worldToLight = mul(worldPos, sunVP);
+	float2 shadowCoords = worldToLight.xy * 0.5 + 0.5;
+	float shadow = tex_shadowmap.Sample(samplerLinear, shadowCoords);
 
-	color = float4((color.rgb / PI) * lightColor * max(dot(normal, omega), 0), 1);
-	return color;
+	if (shadow < worldToLight.z) {
+		color *= 0.1;
+	}
+
+	float3 colorSum = float3(0.5,0.5,0.5) * max(dot(normal, sunPos), 0);
+
+	for(int i = 0; i < 4; i++) {
+		float3 diff = lightPos[i] - worldPos.xyz;
+		float dist = length(diff);
+		float3 omega = diff / dist;
+
+		colorSum += lightColor[i].rgb / (dist/40) * max(dot(normal, omega), 0);
+	}
+
+	return float4(color.rgb / PI * colorSum, 1);
 }

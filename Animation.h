@@ -120,7 +120,12 @@ public:
 		}
 
 		if (animationFinished() == true) { 
-			resetAnimationTime();
+			if (currentAnimation == "roar") {
+				currentAnimation = "Run";
+				resetAnimationTime();
+			} else {
+				resetAnimationTime();
+			}
 		}
 
 		int frame = 0;
@@ -131,7 +136,6 @@ public:
 			matrices[i] = animation->interpolateBoneToGlobal(name, matrices, frame, interpolationFact, i);
 		}
 
-		animation->calcFinalTransforms(matrices/*, coordTransform*/);
+		animation->calcFinalTransforms(matrices);
 	}
 };
-

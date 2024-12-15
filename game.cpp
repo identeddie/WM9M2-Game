@@ -7,6 +7,7 @@
 #include "ShaderManager.h"
 #include "GamesEngineeringBase.h"
 #include "Perspective.h"
+#include "LevelLoader.h"
 
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nCmdShow) {
 	Window* win = new Window;
@@ -15,71 +16,54 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 	win->create(1024, 700, "Window");
 	dxcore->init(win->width, win->height, win->hwnd, false);
 
-	/*Triangle tri(*dxcore);
-	Shader shader;*/
 	ShaderManager shaders;
 	TextureManager textures;
-
+	ModelManager models;
 	Sampler sampler;
-	sampler.init(dxcore);
+	sampler.init(dxcore); 
+	Vec3 pos(10, 25, 10);
+	Perspective cam(pos);
 
-	/*shaders->addShader("pulse", shader);
-	shaders->shaders["pulse"].init(*dxcore, "Shaders/vs_basic.txt", "Shaders/ps_basic.txt", false);*/
-
-	Plane plane;
-	plane.init(dxcore, shaders);
+	Plane* plane = new Plane;
+	plane->init(dxcore, shaders, textures, "Textures/grass.png");
+	Object<Shape> planeInst(plane);
+	models.addShapeInstance(&planeInst);
 
 	Skybox sky;
-	sky.init(dxcore, shaders, textures, 20, 20, 80);
+	sky.init(dxcore, shaders, textures, 20, 20, 150);
 
-	/*Cube cube;
-	cube.init(dxcore, shaders);*/
+	Cube* cube = new Cube;
+	cube->init(dxcore, shaders, textures);
+	Object<Shape> cubeInst(cube, Vec3(10, 0, 10), Vec3(3.f, 3.f, 3.f));
+	models.addShapeInstance(&cubeInst);
 
-	//Sphere sphere;
-	//sphere.init(dxcore, shaders, 10, 10, 10);
-
-	/*StaticModel tree;
-	tree.init(dxcore, shaders, textures, "Resources/Models/acacia_003.gem");*/
-
-	/*AnimatedModel* pump = new AnimatedModel;
-	pump->init(dxcore, shaders, textures, "Resources/Models/Pump_Action_Shotgun.gem");
-
-	AnimatedModelInstance* shot = new AnimatedModelInstance;
-	shot->init(pump);
-	shot->update("Armature|01 Select", 0);*/
+	Sphere* sphere = new Sphere;
+	sphere->init(dxcore, shaders, 10, 10, 10);
+	Object<Shape> sphereInst(sphere, Vec3(0, 0, 0));
+	models.addShapeInstance(&sphereInst);
+	float radius = sphere->getRadius();
 
 	AnimatedModel* trex = new AnimatedModel;
 	trex->init(dxcore, shaders, textures, "Resources/Models/TRex.gem");
 
 	StaticModel* pine = new StaticModel;
 	pine->init(dxcore, shaders, textures, "Resources/Models/pine.gem");
+	Object<StaticModel> pine1(pine, Vec3(0.f), Vec3(0.1f, 0.1f, 0.1f));
+	models.addStaticInstance(&pine1);
+	Object<StaticModel> pine2(pine, Vec3(-50.f, 0.f, 12.f), Vec3(0.1f, 0.1f, 0.1f));
+	models.addStaticInstance(&pine2);
+	Object<StaticModel> pine3(pine, Vec3(-85.f, 0.f, 15.f), Vec3(0.1f, 0.1f, 0.1f));
+	models.addStaticInstance(&pine3);
+	Object<StaticModel> pine4(pine, Vec3(85.f, 0.f, 40.f), Vec3(0.1f, 0.1f, 0.1f));
+	models.addStaticInstance(&pine4);
+	Object<StaticModel> pine5(pine, Vec3(70.f, 0.f, -30.f), Vec3(0.1f, 0.1f, 0.1f));
+	models.addStaticInstance(&pine5);
 
 	AnimatedModelInstance* dino = new AnimatedModelInstance;
 	dino->init(trex);
 	dino->update("Run", 0);
-	//dino.changeAnimation("Run");
-
-	//AnimatedModel* soldier = new AnimatedModel;
-	//soldier->init(dxcore, shaders, textures, "Resources/Models/Soldier1.gem");
-
-	//AnimatedModelInstance guy;
-	//guy.init(soldier);
-	//guy.update("Idle (2)", 0);
-
-	Vec3 pos(10, 25, 10);
-	Persective cam(pos);
-	cam.fwd = Vec3(0, 1, 0);
-
-	float time = 0;
-
-	int prevMouseX = win->mousex;
-	int prevMouseY = win->mousey;
-
-	//shaders.apply(dxcore, "pulse");
-
-	/*ConstantBuffer buff;
-	buff.init(dxcore, &constBuffCPU2, 48);
-	buff.apply(dxcore);*/
+	Object<AnimatedModelInstance> dinoObj(dino, Vec3(50, 0, -50), Vec3(5, 5, 5));
+	models.addAnimatedInstance(&dinoObj);
 
 	GamesEngineeringBase::Timer timer;
 	timer.reset();
@@ -89,107 +73,115 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 	shaders.addShader("fsq", fsqShader);
 
 	ShadowMap shadowmap;
-	shadowmap.init(dxcore, 1028, 1028, shaders, textures);
+	shadowmap.init(dxcore, 2048, 2048, shaders, textures);
+
+	Reflection reflection;
+	reflection.init(dxcore, 1024, textures, shaders);
+
+	ReflectionPlane reflectionPlane;
+	reflectionPlane.init(dxcore, shaders, textures, 50);
 
 	GBuffer gBuff;
 	gBuff.init(dxcore, *win, textures, shadowmap);
 
 	FullScreenQuad fsq;
 
-	float aspect = (float)win->width / (float)win->height;
-	Matrix proj = Matrix::perspectiveProj(aspect, M_PI / 2.f, 0.05f, 100.f);
+	//loadGame(dxcore, "loadfile.txt", models, shaders, textures, cam); //Does not work, unsolved data corruption
 
-	Matrix lightProj = Matrix::orthographicProj(400, 400, 0.1f, 200.f);
+	float aspect = (float)win->width / (float)win->height;
+	Matrix proj = Matrix::perspectiveProj(aspect, M_PI / 2.f, 0.05f, 250.f);
+	Matrix view;
+	Matrix lightProj = Matrix::orthographicProj(400, 400, -400.f, 400.f);
 	Matrix lightView;
 
-	Matrix worldMat;
-	Matrix view;
+	Vec4 lightPos[4];
+	lightPos[0] = Vec4(30.f, 10.f, -35.f);
+	lightPos[1] = Vec4(40.f, 15.f, 40.f);
+	lightPos[2] = Vec4(0.f, 60.f, 5.f);
+	lightPos[3] = Vec4(0.f, 2.f, 10.f);
 
-	//Vec3 sunPos(20.f, 200.f, 0.f);
-	Color sunColor(1.f, 1.f, 1.f);
+	Color lightColor[4];
+	lightColor[0] = Color(0.8f, 0.6f, 0.6f);
+	lightColor[1] = Color(0.6f, 0.5f, 1.f);
+	lightColor[2] = Color(1.f, 1.f, 0.6f);
+	lightColor[3] = Color(0.8f, 0.6f, 0.6f);
+
+	Matrix worldMat;
+
+	float time = 0;
+	int prevMouseX = win->mousex;
+	int prevMouseY = win->mousey;
 
 	while (true) {
 		dxcore->clear();
 
 		win->processMessages();
-
 		//win.clipMouseToWindow();
 
-		Vec3 sunPos = Vec3(20.f * cosf(time), 40, 20.f * sinf(time));
-		//Vec3 sunPos = Vec3(1.f, 0.2f, 0.1f);
+		Vec3 sunPos = Vec3(50.f * cosf(time), 40, 50.f * sinf(time));
+		sunPos = Vec3(50.f, 40.f, 50.f);
 
 		float dt = timer.dt();
 		time += dt;
 
-		lightProj = Matrix::orthographicProj(400, 400, 0.1f, 200);
+		if (win->keyPressed(' ')) {
+			if (dino->instance.currentAnimation == "Run") {
+				dinoObj.model->changeAnimation("roar");
+			} else {
+				dinoObj.model->changeAnimation("Run");
+			}
+		}
 
 		cam.gander(prevMouseX - win->mousex, win->mousey - prevMouseY);
-		cam.meander(*win, dt);
+		Vec3 posChange = cam.meander(*win, dt);
+		models.shapeInstances[2]->move(posChange);
 		prevMouseX = win->mousex;
 		prevMouseY = win->mousey;
 		//win.updateMouse(win.width, win.height);
 		 
-		Vec3 to = cam.pos + cam.fwd;
-		//to = Vec3(0, 30, 0);
-		view = Matrix::lookAt(cam.pos, to);
+		Vec3 from = models.shapeInstances[2]->pos + Vec3(0.f, cam.pos.y, 0.f);
+		Vec3 to = from + cam.fwd;
+		view = Matrix::lookAt(from, to);
+		Matrix reflectionView = reflectionPlane.F * view;
+		reflectionView = reflectionView * proj;
 		view = view * proj;
 
-		to = Vec3(0.0);
-		lightView = Matrix::lookAt(sunPos, to);
+		to = Vec3(0.f);
+		from = Vec3(sunPos.x, sunPos.y, sunPos.z);
+		lightView = Matrix::lookAt(from, to);
 		lightView = lightView * lightProj;
 
+		sunPos = sunPos.normalize();
 
-		dino->update(dt);
+		//Update animation for animated models
+		models.updateAnimation(dt);
+		//Handle collision between models
+		models.handleCollision();
+
+		//Reflection Pass - Render to reflection texture
+		reflection.setupPass(dxcore);
+		models.reflectionPass(dxcore, shaders, textures, &reflectionView);
+		worldMat = Matrix::rotateX(M_PI);
+		sky.reflectionPass(dxcore, shaders, textures, &worldMat, &reflectionView);
 
 		shadowmap.setupShadowPass(dxcore);
+		models.shadowDraw(dxcore, shaders, textures, &lightView); 
 
-		worldMat.eye();
-		plane.shadowDraw(dxcore, shaders, &worldMat, &lightView);
-		worldMat = Matrix::scaling(Vec3(0.1f, 0.1f, 0.1f));
-		pine->shadowDraw(dxcore, shaders, &worldMat, &lightView);
-		//worldMat = Matrix::scaling(Vec3(5, 5, 5)) * Matrix::translation(Vec3(20, 0, 0));
-		//dino->shadowDraw(dxcore, shaders, &worldMat, &lightView);
-
-		//Set render target to get gbuff
+		//Main pass - Render to gbuffers
 		gBuff.setRenderTargets(dxcore);
+		models.draw(dxcore, shaders, textures, &view, &time, &dt);
+		//planeInst.draw(dxcore, shaders, textures, &view, &time);
+		Vec2 offsets(time / 10.f, time / 8.f);
+		reflectionPlane.draw(dxcore, shaders, textures, &view, &offsets);
 
-		worldMat.eye();
-		plane.draw(dxcore, shaders, &worldMat, &view);
-		worldMat = Matrix::scaling(Vec3(0.1f, 0.1f, 0.1f));
-		pine->draw(dxcore, shaders, textures, &worldMat, &view, &time);
-		worldMat = Matrix::scaling(Vec3(5, 5, 5)) * Matrix::translation(Vec3(20, 0, 0));
-		dino->draw(dxcore, shaders, textures, &worldMat, &view, dt);
-
+		//Final Pass - Lighting and Skybox
 		dxcore->renderToBackbuffer();
-
-		//worldMat = Matrix::rotateX(M_PI) * Matrix::scaling(Vec3(200, 200, 200));
-		//sky.draw(dxcore, shaders, textures, &worldMat, &view, &time);
-
-		Matrix inverseView = view.invert();
-
-		fsq.draw(dxcore, shaders, gBuff, &sunPos, &sunColor, &inverseView);
-
-		//Draw Things
-
-		/*worldMat = Matrix::scaling(Vec3(100, 100, 100));
-		sphere.draw(dxcore, shaders, &worldMat, &view, &time);*/
-
-		//worldMat.eye();
-		//plane.draw(dxcore, shaders, &worldMat, &view);
-
-		/*
-		worldMat = Matrix::translation(Vec3(0, 0, 5));
-		sphere.draw(dxcore, shaders, &worldMat, &view, &time);
-
-		worldMat = Matrix::translation(Vec3(5, 0, 0));
-		sphere.draw(dxcore, shaders, &worldMat, &view, &time);
-
-		worldMat = Matrix::scaling(Vec3(0.1f, 0.1f, 0.1f)) * Matrix::rotateY(sinf(time));
-		tree.draw(dxcore, shaders, &worldMat, &view);*/
+		worldMat = Matrix::rotateX(M_PI);
+		sky.draw(dxcore, shaders, textures, &worldMat, &view, &time);
+		fsq.draw(dxcore, shaders, gBuff, &sunPos, lightPos, lightColor, &lightView);
 
 		//worldMat = Matrix::scaling(Vec3(5, 5, 5)) * Matrix::translation(Vec3(10.f, 0.f, 0.f));
 		//guy.draw(dxcore, shaders, textures, &worldMat, &view, dt);
-
 		//worldMat = Matrix::scaling(Vec3(0.1f, 0.1f, 0.1f)) * Matrix::rotateY(-cam.dir.phi) * Matrix::translation(cam.pos);
 		//shot->draw(dxcore, shaders, textures, &worldMat, &view, dt);
 

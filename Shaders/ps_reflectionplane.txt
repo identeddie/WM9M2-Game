@@ -1,0 +1,52 @@
+Texture2D tex : register(t0);
+Texture2D tex_norm : register(t1);
+Texture2D tex_under : register(t2);
+SamplerState samplerLinear : register(s0);
+
+cbuffer uvOffsetBuff {
+	float2 offsets;
+}
+
+struct PS_INPUT {
+	float4 Pos : SV_POSITION;
+	float4 WorldPos : POS;
+	float3 Normal : NORMAL;
+	float3 Tangent : TANGENT;
+	float2 TexCoords : TEXCOORD;
+};
+
+struct PS_OUTPUT {
+	float4 Color : SV_Target0;
+	float4 Normal : SV_Target1;
+	float4 WorldPos : SV_Target2;
+};
+
+PS_OUTPUT PS(PS_INPUT input) {
+	PS_OUTPUT output;
+
+	float2 sampleCoord = input.Pos.xy;
+	sampleCoord.x /= 1024;
+	sampleCoord.y /= 700;
+	float4 color = tex.Sample(samplerLinear, sampleCoord);
+	float4 colorUnder = tex_under.Sample(samplerLinear, input.TexCoords);
+	
+	if (color.a < 0.5) {
+    		discard;
+	}
+
+	output.Color = float4(color.rgb * 0.5 + colorUnder.rgb * 0.5, 1.0);
+
+	float3 mapNormal = tex_norm.Sample(samplerLinear, input.TexCoords + offsets).xyz;
+	mapNormal = mapNormal * 2.0 - 1.0;
+
+	float3 normal = normalize(input.Normal);
+	float3 tangent = normalize(input.Tangent);
+	float3 binormal = normalize(cross(normal, tangent));
+	float3x3 TBN = float3x3(tangent, binormal, normal);
+	float3 finalNormal = normalize(mul(mapNormal, TBN));
+
+	output.Normal = float4(finalNormal, 1.0);
+	output.WorldPos = input.WorldPos;
+
+	return output;
+}

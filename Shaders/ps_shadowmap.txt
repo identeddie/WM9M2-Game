@@ -1,5 +1,9 @@
+Texture2D tex : register(t0);
+SamplerState samplerLinear : register(s0);
+
 struct PS_INPUT {
 	float4 Pos : SV_POSITION;
+	float2 TexCoords : TEXCOORD;
 };
 
 struct PS_OUTPUT {
@@ -8,6 +12,14 @@ struct PS_OUTPUT {
 
 PS_OUTPUT PS(PS_INPUT input) {
 	PS_OUTPUT output;
+
+	float4 color = tex.Sample(samplerLinear, input.TexCoords);
+
+	if (color.a < 0.5) {
+		discard;
+	}
+
 	output.Depth = input.Pos.z;
+	output.Depth = output.Depth * 0.5 + 0.5;
 	return output;
 }

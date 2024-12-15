@@ -1,0 +1,5 @@
+Textures/grass.png
+10 0 10 3 3 3
+10 0 0 0
+5 Resources/Models/pine.gem 0 0 0 0.1 0.1 0.1 -50 0 12 0.1 0.1 0.1 -85 0 15 0.1 0.1 0.1 60 0 40 0.1 0.1 0.1 70 0 -30 0.1 0.1 0.1
+1 Resources/Models/TRex.gem 50 0 -50 5 5 5 Run
